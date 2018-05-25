@@ -13,15 +13,14 @@ const validateValues = (test, ideal) => {
     return result
 }
 
-const tableEqual = (tmp, ideal) => ideal.reduce((acc,key,index) => {
-        return [
-            ...acc,
-            `${ideal[index]} | ${tmp[index]} | ${ideal[index] == tmp[index]}`
-        ]
-    },[])
+const tableEqual = (tmp, ideal, onlyFalse = false) =>
+    ideal.reduce((acc, key, index) => {
+        return onlyFalse && ideal[index] == tmp[index]
+            ? acc
+            : [...acc, `${index} :: ${ideal[index]} | ${tmp[index]} | ${ideal[index] == tmp[index]}`]
+    }, [])
 
-
-const time = (date) => parseInt(date.getTime() / 1000)
+const time = date => parseInt(date.getTime() / 1000)
 
 module.exports = {
     validateValues,

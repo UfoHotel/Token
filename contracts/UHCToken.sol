@@ -41,25 +41,15 @@ contract UHCToken is ERC20 {
 
     groupPolicy public groupPolicyInstance = groupPolicy(0, 3, 4, 9, 2, 9);
 
-    struct statusPolicy{
-        uint8 _unknown;
-        uint8 _silver;
-        uint8 _gold;
-        uint8 _platinum;
-        uint8 _diamont;
-    }
+    uint8 public transferFeePercent = 3;
 
-    statusPolicy public statusPolicyInstance = statusPolicy(0,1,2,3,4);
-
-    uint8[5] public transferFees = [ 7,7,5,3,0];
-
-    event EvGroupChanged(address _address, uint8 _oldgroup, uint8 _newgroup);
-    event EvMigration(address _address, uint256 _balance, uint256 _secret);
-    event EvUpdateStatus(address _address, uint8 _oldStatus, uint8 _newStatus);
+    event EvGroupChanged(address indexed _address, uint8 _oldgroup, uint8 _newgroup);
+    event EvMigration(address indexed _address, uint256 _balance, uint256 _secret);
+    event EvUpdateStatus(address indexed _address, uint8 _oldStatus, uint8 _newStatus);
     event Pause();
     event Unpause();
 
-    constructor (string _name, string _symbol, uint8 _decimals,uint256 _summarySupply) public {
+    constructor (string _name, string _symbol, uint8 _decimals,uint256 _summarySupply, uint8 _transferFeePercent) public {
         owner = msg.sender;
 
         accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3);
@@ -69,6 +59,7 @@ contract UHCToken is ERC20 {
         symbol = _symbol;
         decimals = _decimals;
         summarySupply = _summarySupply;
+        transferFeePercent = _transferFeePercent;
         emit Transfer(address(0), msg.sender, _summarySupply);
     }
 
@@ -199,18 +190,20 @@ contract UHCToken is ERC20 {
         return accounts[_address].balance;
     }
 
-    function serviceSetStatus(address _address, uint8 status) external minGroup(groupPolicyInstance._admin) {
+    function serviceSetStatus(address _address, uint8 status) external minGroup(groupPolicyInstance._backend) returns(bool){
         require(_address != address(0));
         require(status >= 0 && status <= 4);
         uint8 oldStatus = accounts[_address].status;
         accounts[_address].status = status;
+
         emit EvUpdateStatus(_address, oldStatus, status);
+
+        return true;
     }
 
-    function serviceUpdateTransferFee(uint8 status, uint8 newFee) external minGroup(groupPolicyInstance._admin) {
-        require(status < transferFees.length);
+    function serviceUpdateTransferFeePercent(uint8 newFee) external minGroup(groupPolicyInstance._admin) {
         require(newFee < 100);
-        transferFees[status] = newFee;
+        transferFeePercent = newFee;
     }
 
     function getGroup(address _check) external constant returns(uint8 _group) {
@@ -225,16 +218,9 @@ contract UHCToken is ERC20 {
         return holders.getNode(_holder);
     }
 
-    function getTransferFee(address _check) public constant returns(uint8){
-        if(accounts[_check].group > 0){
-            return 0;
-        }
-        return transferFees[accounts[_check].status];
-    }
-
     function transfer(address _to, uint256 _value) onlyPayloadSize(64) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
         require(_to != address(0));
-        uint256 transferFee = _value.div(100).mul(getTransferFee(msg.sender));
+        uint256 transferFee = _value.div(100).mul(transferFeePercent);
         require (accounts[msg.sender].group > 0 && accounts[msg.sender].balance >= _value || accounts[msg.sender].balance >= _value + transferFee);
 
         if(accounts[msg.sender].group == 0){
@@ -257,7 +243,7 @@ contract UHCToken is ERC20 {
     function transferFrom(address _from, address _to, uint256 _value) onlyPayloadSize(64) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
         require(_to != address(0));
         require(_from != address(0));
-        uint256 transferFee = _value.div(100).mul(getTransferFee(_from));
+        uint256 transferFee = _value.div(100).mul(transferFeePercent);
         require(accounts[msg.sender].group > 0 && accounts[_from].balance >= _value || accounts[_from].balance >= _value + transferFee);
         require(accounts[msg.sender].group > 0 &&  allowed[_from][msg.sender] >= _value || allowed[_from][msg.sender] >= _value + transferFee);
 

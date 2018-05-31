@@ -45,7 +45,7 @@ contract UHCToken is ERC20 {
 
     event EvGroupChanged(address indexed _address, uint8 _oldgroup, uint8 _newgroup);
     event EvMigration(address indexed _address, uint256 _balance, uint256 _secret);
-    event EvUpdateStatus(address indexed _address, uint8 _oldStatus, uint8 _newStatus);
+    event EvUpdateStatus(address indexed _address, uint8 _oldstatus, uint8 _newstatus);
     event Pause();
     event Unpause();
 

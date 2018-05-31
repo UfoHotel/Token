@@ -2,9 +2,8 @@ pragma solidity ^0.4.23;
 
 import "./SafeMath.sol";
 import "./UHCToken.sol";
-import "./GroupManager.sol";
 
-contract EtherReceiver is GroupManager{
+contract EtherReceiver {
 
     using SafeMath for uint256;
 
@@ -15,9 +14,10 @@ contract EtherReceiver is GroupManager{
     uint256 public      totalSold;
 
     mapping(uint256 => uint256) public      soldOnVersion;
-    mapping(uint256 => uint256) public      etherOnVersion;
+    mapping(address => uint8)   private     group;
 
     uint256 public     version;
+    uint256 public      etherTotal;//Total ether on current contract version
 
     bool    public     isActive = false;
     
@@ -30,6 +30,13 @@ contract EtherReceiver is GroupManager{
 
     mapping(address => Account) public accounts;
 
+    struct groupPolicy {
+        uint8 _backend;
+        uint8 _admin;
+    }
+
+    groupPolicy public groupPolicyInstance = groupPolicy(3,4);
+
     uint256[4] public statusMinBorders; //example: [24999, 99999, 349999, 1299999]
 
     UHCToken public            token;
@@ -38,7 +45,8 @@ contract EtherReceiver is GroupManager{
     event EvWithdraw(address indexed _address, uint256 _spent);
     event EvSwitchActivate(address indexed _switcher, bool _isActivate);
     event EvSellStatusToken(address indexed _owner, uint256 _oldtokens, uint256 _newtokens);
-    event EvUpdateStatus(address indexed _owner, uint256 _oldstatus, uint256 _newstatus);
+    event EvUpdateVersion(address indexed _owner, uint256 _version);
+    event EvGroupChanged(address _address, uint8 _oldgroup, uint8 _newgroup);
 
     constructor (address _token,uint256 _startTime, uint256 _weiPerMinToken, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, bool _activate) public{
         token = UHCToken(_token);
@@ -48,6 +56,7 @@ contract EtherReceiver is GroupManager{
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
         isActive = _activate;
+        group[msg.sender] = groupPolicyInstance._admin;
     }
 
     modifier onlyOwner(){
@@ -59,16 +68,22 @@ contract EtherReceiver is GroupManager{
         require(now > startTime && isActive && soldOnVersion[version] < softcap);
         _;
     }
+
+    modifier minGroup(int _require) {
+        require(group[msg.sender] >= _require || msg.sender == token.owner());
+        _;
+    }
     //После вызова, все данные о трате эфира будут удалены
     function refresh(uint256 _startTime, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, bool _activate) external minGroup(groupPolicyInstance._admin) {
-        //Если контракт кончился и либо достигли целевых продаж, либо всем инвесторам были возвращены средства
-        require(!isActive && (soldOnVersion[version] >= softcap || etherOnVersion[version] == 0));
+        //Если контракт кончился и либо достигли целевых продаж и сняли эфир, либо всем инвесторам были возвращены средства(эфира на контракте нет!)
+        require(!isActive &&  etherTotal == 0);
         startTime = _startTime;
         softcap = _softcap;
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
         version = version.add(1);
         isActive = _activate;
+        emit EvUpdateVersion(msg.sender, version);
     }
 
     function transfer(address _to, uint256 _value) external minGroup(groupPolicyInstance._backend) saleIsOn() {
@@ -82,6 +97,7 @@ contract EtherReceiver is GroupManager{
         require(!isActive && soldOnVersion[version] >= softcap);
         uint256 contractBalance = address(this).balance;
         token.owner().transfer(contractBalance);
+        etherTotal = 0;
 
         return true;
     }
@@ -111,10 +127,28 @@ contract EtherReceiver is GroupManager{
 
         uint value = accounts[msg.sender].spent;
         accounts[msg.sender].spent = 0;
-        etherOnVersion[version] = etherOnVersion[version].sub(value);
+        etherTotal = etherTotal.sub(value);
         msg.sender.transfer(value);
 
         emit EvWithdraw(msg.sender, value);
+    }
+
+    function serviceGroupChange(address _address, uint8 _group) minGroup(groupPolicyInstance._admin) external returns(uint8) {
+        uint8 old = group[_address];
+        if(old <= groupPolicyInstance._admin) {
+            group[_address] = _group;
+            emit EvGroupChanged(_address, old, _group);
+        }
+        return group[_address];
+    }
+
+    function () external saleIsOn() payable{
+        uint256 tokenCount = msg.value.div(weiPerMinToken);
+        require(tokenCount > 0);
+
+        token.transfer( msg.sender, tokenCount);
+
+        updateAccountInfo(msg.sender, msg.value, tokenCount);
     }
 
     function updateAccountInfo(address _address, uint256 incSpent, uint256 incTokenCount) private returns(bool){
@@ -130,12 +164,12 @@ contract EtherReceiver is GroupManager{
         //Увеличиваем суммарную продажу токенов за версию
         soldOnVersion[version] = soldOnVersion[version].add(incTokenCount);
         //Увеличиваем суммарные затраты инвесторов за версию
-        etherOnVersion[version] = etherOnVersion[version].add(incSpent);
+        etherTotal = etherTotal.add(incSpent);
 
         //Событие новой покупки
         emit EvAccountPurchase(_address, accounts[_address].spent, accounts[_address].allTokens, totalSold);
         //Проверяем что за эту покупку можем обновить статус инвестора
-        if(now < startTime + durationOfStatusSell && now >=startTime){
+        if(now < startTime + durationOfStatusSell && now >= startTime){
             //Суммарные токены в период статуса
             uint256 lastStatusTokens = accounts[_address].statusTokens;
             //Увеличиваем суммарные токены в период статуса
@@ -159,8 +193,6 @@ contract EtherReceiver is GroupManager{
             if(currentStatus < newStatus){
                 //Меняем статус
                 token.serviceSetStatus(_address, uint8(newStatus));
-                //Вызываем событие обновления статуса
-                emit EvUpdateStatus(_address, currentStatus, newStatus);
             }
             //Вызываем событие покупки статусных токенов
             emit EvSellStatusToken(_address, lastStatusTokens, accounts[_address].statusTokens );
@@ -177,20 +209,15 @@ contract EtherReceiver is GroupManager{
         }
     }
 
-    function () external saleIsOn() payable{
-        uint256 tokenCount = msg.value.div(weiPerMinToken);
-        require(tokenCount > 0);
-
-        token.transfer( msg.sender, tokenCount);
-
-        updateAccountInfo(msg.sender, msg.value, tokenCount);
-    }
-
     function calculateTokenCount(uint256 weiAmount) external constant returns(uint256 summary){
         return weiAmount.div(weiPerMinToken);
     }
 
     function isSelling() external constant returns(bool){
         return now > startTime && soldOnVersion[version] < softcap && isActive;
+    }
+
+    function getGroup(address _check) external constant returns(uint8 _group) {
+        return group[_check];
     }
 }

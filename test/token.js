@@ -275,6 +275,37 @@ contract('UHC token', accounts => {
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
 
+    it('(Prove...) pause', async () => {
+        const tmp = []
+        const value = 1000 * 10 ** tokenSetting.decimals
+        const subvalue = 500 * 10 ** tokenSetting.decimalsconst
+        //Stop contract
+        await tokenInstance.servicePause({ from: ethAddresses[0] })
+
+        await web3.personal.unlockAccount(ethAddresses[1], '')
+
+        await tokenInstance.approve(ethAddresses[2], 0, value, { from: ethAddresses[1] }).catch(e => {
+            tmp.push(true)
+        })
+        await tokenInstance
+            .transferFrom(ethAddresses[2], ethAddresses[3], subvalue, { from: ethAddresses[1] })
+            .catch(e => {
+                tmp.push(true)
+            })
+        await tokenInstance.transfer(ethAddresses[2], subvalue, { from: ethAddresses[1] }).catch(e => {
+            tmp.push(true)
+        })
+        await tokenInstance.serviceUnpause({ from: ethAddresses[0] })
+        await tokenInstance.serviceUnpause({ from: ethAddresses[0] }).catch(e => {
+            tmp.push(true)
+        })
+        const ideal = [true, true, true, true]
+        const result = utils.validateValues(tmp, ideal)
+        console.log(utils.tableEqual(tmp, ideal, true))
+
+        assert.equal(result, ideal.length, ' only few tests were passed :c')
+    })
+
     it('(Prove...) total supply changing', async () => {
         const tmp = []
         const svalue = 100 * 10 ** tokenSetting.decimals
@@ -366,7 +397,53 @@ contract('UHC token', accounts => {
             tmp[0],
             tmp[1],
         ]
-        //console.log(utils.tableEqual(tmp,ideal))
+        console.log(utils.tableEqual(tmp,ideal,false))
+        let result = utils.validateValues(tmp, ideal)
+        assert.equal(result, ideal.length, ' only few tests were passed :c')
+    })
+    it('Migration', async () => {
+        const tmp = []
+        //Activate migration
+        await tokenInstance.settingsSwitchState({ from: ethAddresses[0] })
+        tmp.push(await tokenInstance.contractEnable())
+        if (tmp[0]) {
+            console.log('fatal error')
+            return
+        }
+        const startOwnerBalance = await tokenInstance.balanceOf('0x0', { from: ethAddresses[0] })
+        let sum = 0
+        const holders = []
+        const holderLength = (await
+                tokenInstance.getHoldersLength()
+        ).valueOf()
+        console.log(holderLength)
+        for (let i = 0; i < holderLength; i++) {
+            const address = (await
+                    tokenInstance.getHolderLink(i === 0 ? "0x0" : holders[i - 1].address)
+            )
+                [2]
+            holders.push({
+                address: address,
+                balance: (await tokenInstance.balanceOf(address)).valueOf()
+            })
+        }
+
+        for (let i = 0; i < holderLength; i++) {
+            if(holders[i].address === ethAddresses[0]){
+                continue
+            }
+            await web3.personal.unlockAccount(holders[i].address, '')
+            const inc = parseInt(
+                (await tokenInstance.userMigration('123', {from: holders[i].address}))['logs'][0]['args']['_balance'],
+            )
+            sum += inc
+        }
+
+        const endOwnerBalance = await tokenInstance.balanceOf('0x0', { from: ethAddresses[0] })
+        const ideal = [false, startOwnerBalance.add(sum)]
+        tmp.push(endOwnerBalance)
+
+        console.log(utils.tableEqual(tmp,ideal,false))
         let result = utils.validateValues(tmp, ideal)
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })

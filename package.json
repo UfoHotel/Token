@@ -1,5 +1,11 @@
 {
   "name": "ufo-smart-contract",
+  "scripts": {
+    "compile": "truffle compile",
+    "migrate": "truffle migrate",
+    "testToken": "truffle test ./test/token.js",
+    "testReceiver": "truffle test ./test/receiver.js"
+  },
   "devDependencies": {
     "babel-core": "^6.26.0",
     "babel-loader": "^7.1.3",

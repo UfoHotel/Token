@@ -2,7 +2,7 @@ pragma solidity ^0.4.23;
 
 import "./SafeMath.sol";
 import "./UHCToken.sol";
-
+//Not complete
 contract MainLogic {
     using SafeMath for uint256;
 

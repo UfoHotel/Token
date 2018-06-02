@@ -73,9 +73,8 @@ contract EtherReceiver {
         require(group[msg.sender] >= _require || msg.sender == token.owner());
         _;
     }
-    //После вызова, все данные о трате эфира будут удалены
+
     function refresh(uint256 _startTime, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, bool _activate) external minGroup(groupPolicyInstance._admin) {
-        //Если контракт кончился и либо достигли целевых продаж и сняли эфир, либо всем инвесторам были возвращены средства(эфира на контракте нет!)
         require(!isActive &&  etherTotal == 0);
         startTime = _startTime;
         softcap = _softcap;
@@ -118,7 +117,6 @@ contract EtherReceiver {
     }
 
     function withdraw() external {
-        //Если контракт закончился и не достигли целевых продаж
         require(!isActive && soldOnVersion[version] < softcap);
 
         tryUpdateVersion(msg.sender);
@@ -152,56 +150,43 @@ contract EtherReceiver {
     }
 
     function updateAccountInfo(address _address, uint256 incSpent, uint256 incTokenCount) private returns(bool){
-        //Пытаемя обновить версию аккаунта
         tryUpdateVersion(_address);
-        //Увеличиваем суммарные затраты инвестора
         accounts[_address].spent = accounts[_address].spent.add(incSpent);
-        //Увеличиваем суммарные токены инвестора
         accounts[_address].allTokens = accounts[_address].allTokens.add(incTokenCount);
 
-        //Увеличиваем суммарную продажу токенов
         totalSold = totalSold.add(incTokenCount);
-        //Увеличиваем суммарную продажу токенов за версию
         soldOnVersion[version] = soldOnVersion[version].add(incTokenCount);
-        //Увеличиваем суммарные затраты инвесторов за версию
         etherTotal = etherTotal.add(incSpent);
 
-        //Событие новой покупки
         emit EvAccountPurchase(_address, accounts[_address].spent, accounts[_address].allTokens, totalSold);
-        //Проверяем что за эту покупку можем обновить статус инвестора
+
         if(now < startTime + durationOfStatusSell && now >= startTime){
-            //Суммарные токены в период статуса
+
             uint256 lastStatusTokens = accounts[_address].statusTokens;
-            //Увеличиваем суммарные токены в период статуса
+
             accounts[_address].statusTokens = lastStatusTokens.add(incTokenCount);
-            //Узнаем текущий статус
+
             uint256 currentStatus = uint256(token.statusOf(_address));
-            //Переменная для нового статуса
+
             uint256 newStatus = currentStatus;
-            //Проходимся по границам выше текущего статуса
+
             for(uint256 i = currentStatus; i < 4; i++){
-                //Если токенов больше чем на текущей границе
+
                 if(accounts[_address].statusTokens > statusMinBorders[i]){
-                    //Увеличиваем новый статус
                     newStatus = i + 1;
                 } else {
-                    //Останавливаем цикл
                     break;
                 }
             }
-            //Если новый статус больше старого
             if(currentStatus < newStatus){
-                //Меняем статус
                 token.serviceSetStatus(_address, uint8(newStatus));
             }
-            //Вызываем событие покупки статусных токенов
             emit EvSellStatusToken(_address, lastStatusTokens, accounts[_address].statusTokens );
         }
 
         return true;
     }
-    //Пытается обновить версию аккаунта, если была обновлена версия контракта
-    //Обнуляется только внесенный эфир,  приобретенное кол-во токенов суммируется с остальными версиями
+
     function tryUpdateVersion(address _address) private {
         if(accounts[_address].version != version){
             accounts[_address].spent = 0;

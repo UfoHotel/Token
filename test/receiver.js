@@ -166,11 +166,11 @@ contract('Receiver', accounts => {
                 tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
 
                 let floorTmp = new BigNumber(svalue * (i + 1))
-                    .mul(mantiss)
+                    .multipliedBy(mantiss)
                     .div(tmp[5])
-                    .floor()
+                    .integerValue(BigNumber.ROUND_FLOOR)
 
-                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).add(floorTmp), tmp[4], tmp[5])
+                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).plus(floorTmp), tmp[4], tmp[5])
                 idealCommon.push(...ideal)
                 tmpCommon = tmpCommon.concat(tmp)
             }
@@ -245,9 +245,8 @@ contract('Receiver', accounts => {
             const accInfo = await receiverInstance.accounts(ethAddresses[i])
             const cap = (await receiverInstance.softcap()).valueOf()
             const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
-            const totalEther = await receiverInstance.etherOnVersion(0)
 
-            tmp.push(!tmpCommon[1] && totalSold < cap && accInfo[0].gt(0) && accInfo[0].lte(totalEther))
+            tmp.push(!tmpCommon[1] && totalSold < cap && accInfo[0].gt(0))
             tmp.push(
                 (await receiverInstance.withdraw({ from: ethAddresses[i] }))['logs'][0]['args']['_spent'].valueOf(),
             )
@@ -268,8 +267,7 @@ contract('Receiver', accounts => {
         //success or withdraw all ether from current version
         const cap = (await receiverInstance.softcap()).valueOf()
         const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
-        const totalEther = await receiverInstance.etherOnVersion(0)
-        tmp.push(totalSold >= cap || totalEther.eq(0))
+        tmp.push(totalSold < cap)
 
         await receiverInstance
             .refresh(
@@ -292,7 +290,7 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 true,
                 { from: ethAddresses[0] },
-            ))['logs'][0]['args']['_newversion'].valueOf(),
+            ))['logs'][0]['args']['_version'].valueOf(),
         )
         const ideal = [false, true, true, 1]
         const result = utils.validateValues(tmp, ideal)
@@ -324,11 +322,11 @@ contract('Receiver', accounts => {
                 tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
 
                 let floorTmp = new BigNumber(svalue * (i + 1))
-                    .mul(mantiss)
+                    .multipliedBy(mantiss)
                     .div(tmp[5])
-                    .floor()
+                    .integerValue(BigNumber.ROUND_FLOOR)
 
-                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).add(floorTmp), tmp[4], tmp[5])
+                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).plus(floorTmp), tmp[4], tmp[5])
                 idealCommon.push(...ideal)
                 tmpCommon = tmpCommon.concat(tmp)
             }
@@ -374,9 +372,8 @@ contract('Receiver', accounts => {
             const accInfo = await receiverInstance.accounts(ethAddresses[i])
             const cap = (await receiverInstance.softcap()).valueOf()
             const totalSold = (await receiverInstance.soldOnVersion(version)).valueOf()
-            const totalEther = await receiverInstance.etherOnVersion(version)
 
-            tmp.push(!tmpCommon[1] && totalSold >= cap && accInfo[version].gt(0) && accInfo[version].lte(totalEther))
+            tmp.push(!tmpCommon[1] && totalSold >= cap && accInfo[version].gt(0))
 
             await receiverInstance.withdraw({ from: ethAddresses[i] }).catch(e => {
                 tmp.push(3)
@@ -387,8 +384,7 @@ contract('Receiver', accounts => {
         //Get ether
         await receiverInstance.getWei({ from: ethAddresses[0] })
         tmpCommon.push(await web3.eth.getBalance(receiverInstance.address))
-        tmpCommon.push(await receiverInstance.etherOnVersion(version))
-        idealCommon.push(0,0)
+        idealCommon.push(0)
         const result = utils.validateValues(tmpCommon, idealCommon)
         console.log(utils.tableEqual(tmpCommon, idealCommon, true))
         assert.equal(result, idealCommon.length, ' only few tests were passed :c')
@@ -420,7 +416,7 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 true,
                 { from: ethAddresses[0] },
-            ))['logs'][0]['args']['_newversion'].valueOf(),
+            ))['logs'][0]['args']['_version'].valueOf(),
         )
         tmp.push((await fakeReceiverInstance.isSelling()).valueOf())
 

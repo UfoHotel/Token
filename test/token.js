@@ -216,7 +216,7 @@ contract('UHC token', accounts => {
             subvalue,
             value - subvalue * (1 + tmp[2] / 100),
             tmp[0] - subvalue,
-            new BigNumber(tmp[1]).add(subvalue),
+            new BigNumber(tmp[1]).plus(subvalue),
         ]
         let result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
@@ -440,8 +440,8 @@ contract('UHC token', accounts => {
         }
 
         const endOwnerBalance = await tokenInstance.balanceOf('0x0', { from: ethAddresses[0] })
-        const ideal = [false, startOwnerBalance.add(sum)]
-        tmp.push(endOwnerBalance)
+        const ideal = [false, startOwnerBalance.add(sum).toString()]
+        tmp.push(endOwnerBalance.toString())
 
         console.log(utils.tableEqual(tmp,ideal,false))
         let result = utils.validateValues(tmp, ideal)

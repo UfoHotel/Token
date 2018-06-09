@@ -27,7 +27,7 @@ const addictAccountCount = 6
 const sendValueWei = 100 * 10 ** 18
 const sendTokenValue = 1000000 * 10 ** decimals
 
-export const initAccounts = async initAcc => {
+const initAccounts = async initAcc => {
     let tmp = []
     const ethAddresses = []
     for (let i = 0; i < addictAccountCount + 1; i++) {
@@ -62,26 +62,26 @@ export const initAccounts = async initAcc => {
     return ethAddresses
 }
 
-export const initToken = async address => {
+const initToken = async address => {
     await web3.personal.unlockAccount(address, '')
     return Token.new(name, symbol, decimals, totalSupply, transferFeePercent, { from: address })
 }
 
-export const initReceiver = async (tokenInstance, address) => {
+const initReceiver = async (tokenInstance, address) => {
     await web3.personal.unlockAccount(address, '')
     return Receiver.new(tokenInstance.address, startTime, weiPerMinToken, softCap, durationOfStatusSell, statusMinBorders, true, {
         from: address,
     })
 }
 //Для проверки ресивера, который закончился
-export const initFinishedReceiver = async (tokenInstance, address, isWithdraw = true) => {
+const initFinishedReceiver = async (tokenInstance, address, isWithdraw = true) => {
     await web3.personal.unlockAccount(address, '')
     return Receiver.new(tokenInstance.address, fakeStartTime, weiPerMinToken, isWithdraw ? softCap : 0, durationOfStatusSell, statusMinBorders, false, {
         from: address,
     })
 }
 
-export const distributeTokens = async (token, owner, addresses) => {
+const distributeTokens = async (token, owner, addresses) => {
     const res = []
     for (let i = 0; i < addresses.length; i++) {
         if (addresses[i] === owner) {
@@ -96,11 +96,11 @@ export const distributeTokens = async (token, owner, addresses) => {
     return res
 }
 
-export const distributeTokensToReceiver = async (token, receiverAddress, owner) => {
+const distributeTokensToReceiver = async (token, receiverAddress, owner) => {
     return (await token.transfer(receiverAddress, softCap * 1.1, { from: owner }))['logs'][0]['args']['_value'].valueOf()
 }
 
-export const tokenSetting = {
+const tokenSetting = {
     name,
     symbol,
     decimals,
@@ -110,7 +110,7 @@ export const tokenSetting = {
     sendTokenValue,
 }
 
-export const receiverSetting = {
+const receiverSetting = {
     startTime,
     fakeStartTime,
     weiPerMinToken,
@@ -118,4 +118,15 @@ export const receiverSetting = {
     durationOfStatusSell,
     statusMinBorders,
     balance: softCap * 1.1,
+}
+
+module.exports = {
+    initAccounts,
+    initToken,
+    initReceiver,
+    initFinishedReceiver,
+    distributeTokens,
+    distributeTokensToReceiver,
+    tokenSetting,
+    receiverSetting,
 }

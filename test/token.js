@@ -397,7 +397,7 @@ contract('UHC token', accounts => {
             tmp[0],
             tmp[1],
         ]
-        console.log(utils.tableEqual(tmp,ideal,false))
+        console.log(utils.tableEqual(tmp,ideal,true))
         let result = utils.validateValues(tmp, ideal)
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
@@ -416,7 +416,7 @@ contract('UHC token', accounts => {
         const holderLength = (await
                 tokenInstance.getHoldersLength()
         ).valueOf()
-        console.log(holderLength)
+        
         for (let i = 0; i < holderLength; i++) {
             const address = (await
                     tokenInstance.getHolderLink(i === 0 ? "0x0" : holders[i - 1].address)
@@ -443,7 +443,7 @@ contract('UHC token', accounts => {
         const ideal = [false, startOwnerBalance.add(sum).toString()]
         tmp.push(endOwnerBalance.toString())
 
-        console.log(utils.tableEqual(tmp,ideal,false))
+        console.log(utils.tableEqual(tmp,ideal,true))
         let result = utils.validateValues(tmp, ideal)
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })

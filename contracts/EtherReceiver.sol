@@ -12,6 +12,8 @@ contract EtherReceiver {
     uint256 public      weiPerMinToken;
     uint256 public      softcap;
     uint256 public      totalSold;
+    uint8   public      referalBonusPercent;
+    uint8   public      refererFeePercent;
 
     mapping(uint256 => uint256) public      soldOnVersion;
     mapping(address => uint8)   private     group;
@@ -26,6 +28,7 @@ contract EtherReceiver {
         uint256 allTokens;
         uint256 statusTokens;
         uint256 version;
+        address referer;
     }
 
     mapping(address => Account) public accounts;
@@ -48,13 +51,15 @@ contract EtherReceiver {
     event EvUpdateVersion(address indexed _owner, uint256 _version);
     event EvGroupChanged(address _address, uint8 _oldgroup, uint8 _newgroup);
 
-    constructor (address _token,uint256 _startTime, uint256 _weiPerMinToken, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, bool _activate) public{
+    constructor (address _token,uint256 _startTime, uint256 _weiPerMinToken, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, uint8 _referalBonusPercent, uint8 _refererFeePercent, bool _activate) public{
         token = UHCToken(_token);
         startTime = _startTime;
         weiPerMinToken = _weiPerMinToken;
         softcap = _softcap;
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
+        referalBonusPercent = _referalBonusPercent;
+        refererFeePercent = _refererFeePercent;
         isActive = _activate;
         group[msg.sender] = groupPolicyInstance._admin;
     }
@@ -74,12 +79,14 @@ contract EtherReceiver {
         _;
     }
 
-    function refresh(uint256 _startTime, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, bool _activate) external minGroup(groupPolicyInstance._admin) {
+    function refresh(uint256 _startTime, uint256 _softcap,uint256 _durationOfStatusSell,uint[4] _statusMinBorders, uint8 _referalBonusPercent, uint8 _refererFeePercent, bool _activate) external minGroup(groupPolicyInstance._admin) {
         require(!isActive &&  etherTotal == 0);
         startTime = _startTime;
         softcap = _softcap;
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
+        referalBonusPercent = _referalBonusPercent;
+        refererFeePercent = _refererFeePercent;
         version = version.add(1);
         isActive = _activate;
         emit EvUpdateVersion(msg.sender, version);
@@ -89,6 +96,19 @@ contract EtherReceiver {
         token.transfer( _to, _value);
 
         updateAccountInfo(msg.sender, 0, _value);
+
+        address referer = token.refererOf(_to);
+        if(referer != address(0)) {
+            uint256 refererFee = _value.div(100).mul(refererFeePercent);
+            uint256 referalBonus = _value.div(100).mul(referalBonusPercent);
+
+            if(refererFee > 0) {
+                token.backendSendBonus(referer, refererFee);
+            }
+            if(referalBonus > 0) {
+                token.backendSendBonus(msg.sender, referalBonus);
+            }
+        }
     }
 
     function getWei() external minGroup(groupPolicyInstance._admin) returns(bool success) {
@@ -147,6 +167,23 @@ contract EtherReceiver {
         token.transfer( msg.sender, tokenCount);
 
         updateAccountInfo(msg.sender, msg.value, tokenCount);
+
+        address referer = token.refererOf(msg.sender);
+        if (msg.data.length == 20 && referer == address(0)) {
+            referer = bytesToAddress(bytes(msg.data));
+            require(referer != msg.sender);
+            require(token.backendSetReferer(msg.sender, referer));
+        }
+        if(referer != address(0)) {
+            uint256 refererFee = tokenCount.div(100).mul(refererFeePercent);
+            uint256 referalBonus = tokenCount.div(100).mul(referalBonusPercent);
+            if(refererFee > 0) {
+                token.backendSendBonus(referer, refererFee);
+            }
+            if(referalBonus > 0) {
+                token.backendSendBonus(msg.sender, referalBonus);
+            }
+        }
     }
 
     function updateAccountInfo(address _address, uint256 incSpent, uint256 incTokenCount) private returns(bool){
@@ -179,7 +216,7 @@ contract EtherReceiver {
                 }
             }
             if(currentStatus < newStatus){
-                token.serviceSetStatus(_address, uint8(newStatus));
+                token.backendSetStatus(_address, uint8(newStatus));
             }
             emit EvSellStatusToken(_address, lastStatusTokens, accounts[_address].statusTokens );
         }
@@ -191,6 +228,12 @@ contract EtherReceiver {
         if(accounts[_address].version != version){
             accounts[_address].spent = 0;
             accounts[_address].version = version;
+        }
+    }
+
+    function bytesToAddress(bytes bys) private pure returns (address addr) {
+        assembly {
+            addr := mload(add(bys,20))
         }
     }
 

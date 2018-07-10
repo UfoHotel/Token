@@ -233,6 +233,12 @@ contract EtherReceiver {
         }
     }
 
+    function bytesToAddress(bytes bys) private pure returns (address addr) {
+        assembly {
+            addr := mload(add(bys,20))
+        }
+    }
+
     function calculateTokenCount(uint256 weiAmount) external constant returns(uint256 summary){
         return weiAmount.div(weiPerMinToken);
     }

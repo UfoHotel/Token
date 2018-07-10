@@ -163,7 +163,7 @@ contract('UHC token', accounts => {
         tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
         tmp.push(
-            (await tokenInstance.transfer(ethAddresses[0], svalue / 2, { from: ethAddresses[1] }))['logs'][1]['args'][
+            (await tokenInstance.transfer(ethAddresses[0], svalue / 2, { from: ethAddresses[1] }))['logs'][0]['args'][
                 '_value'
             ],
         )
@@ -188,23 +188,29 @@ contract('UHC token', accounts => {
         let value = 1000 * 10 ** tokenSetting.decimals
         let subvalue = 500 * 10 ** tokenSetting.decimals
 
-        tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+        tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
         tmp.push((await tokenInstance.transferFeePercent()).valueOf())
         await web3.personal.unlockAccount(ethAddresses[1], '')
         tmp.push(
-            (await tokenInstance.approve(ethAddresses[1], 0, value, { from: ethAddresses[0] }))['logs'][0]['args'][
+            (await tokenInstance.approve(ethAddresses[1], 0, value, { from: ethAddresses[2] }))['logs'][0]['args'][
                 '_value'
             ],
         )
-        tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
+        tmp.push((await tokenInstance.allowance(ethAddresses[2], ethAddresses[1])).valueOf())
+        const transfer = (await tokenInstance.transferFrom(ethAddresses[2], ethAddresses[1], subvalue, { from: ethAddresses[1] }))[
+            'logs'
+            ]
+        // push transfer event
         tmp.push(
-            (await tokenInstance.transferFrom(ethAddresses[0], ethAddresses[1], subvalue, { from: ethAddresses[1] }))[
-                'logs'
-            ][1]['args']['_value'],
+            transfer[0]['args']['_value'],
         )
-        tmp.push((await tokenInstance.allowance.call(ethAddresses[0], ethAddresses[1])).valueOf())
-        tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+        // push transfer event (contract fee)
+        tmp.push(
+            transfer[1]['args']['_value'],
+        )
+        tmp.push((await tokenInstance.allowance.call(ethAddresses[2], ethAddresses[1])).valueOf())
+        tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
 
         let ideal = [
@@ -214,8 +220,9 @@ contract('UHC token', accounts => {
             value,
             value,
             subvalue,
+            subvalue/100 * tmp[2],
             value - subvalue * (1 + tmp[2] / 100),
-            tmp[0] - subvalue,
+            tmp[0] - subvalue * (1 + tmp[2] / 100),
             new BigNumber(tmp[1]).plus(subvalue),
         ]
         let result = utils.validateValues(tmp, ideal)
@@ -252,21 +259,21 @@ contract('UHC token', accounts => {
 
         await tokenInstance.approve(
             ethAddresses[1],
-            await tokenInstance.allowance(ethAddresses[0], ethAddresses[1]),
+            await tokenInstance.allowance(ethAddresses[2], ethAddresses[1]),
             svalue * (1 + tokenSetting.transferFeePercent / 100),
             {
-                from: ethAddresses[0],
+                from: ethAddresses[2],
             },
         )
 
-        tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
+        tmp.push((await tokenInstance.allowance(ethAddresses[2], ethAddresses[1])).valueOf())
 
         tmp.push(
-            (await tokenInstance.transferFrom(ethAddresses[0], ethAddresses[1], svalue, { from: ethAddresses[1] }))[
+            (await tokenInstance.transferFrom(ethAddresses[2], ethAddresses[1], svalue, { from: ethAddresses[1] }))[
                 'logs'
-            ][1]['args']['_value'],
+            ][0]['args']['_value'],
         )
-        tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
+        tmp.push((await tokenInstance.allowance(ethAddresses[2], ethAddresses[1])).valueOf())
 
         let ideal = [tmp[0], true, true, true, svalue * (1 + tokenSetting.transferFeePercent / 100), svalue, 0]
         let result = utils.validateValues(tmp, ideal)

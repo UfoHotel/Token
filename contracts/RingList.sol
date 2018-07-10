@@ -11,18 +11,6 @@ library RingList {
         mapping (address => mapping (bool => address)) list;
     }
 
-    function listExists(LinkedList storage self)
-    internal
-    view returns (bool)
-    {
-        // if the head nodes previous or next pointers both point to itself, then there are no items in the list
-        if (self.list[HEAD][PREV] != HEAD || self.list[HEAD][NEXT] != HEAD) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     function nodeExists(LinkedList storage self, address _node)
     internal
     view returns (bool)
@@ -69,18 +57,6 @@ library RingList {
         }
     }
 
-    function getSortedSpot(LinkedList storage self, address _node, address _value, bool _direction)
-    internal view returns (address)
-    {
-        if (sizeOf(self) == 0) { return 0x0; }
-        require((_node == 0x0) || nodeExists(self,_node));
-        bool exists;
-        address next;
-        (exists,next) = getAdjacent(self, _node, _direction);
-        while  ((next != 0x0) && (_value != next) && ((_value < next) != _direction)) next = self.list[next][_direction];
-        return next;
-    }
-
     function createLink(LinkedList storage self, address _node, address _link, bool _direction) internal  {
         self.list[_link][!_direction] = _node;
         self.list[_node][_direction] = _link;
@@ -107,14 +83,5 @@ library RingList {
 
     function push(LinkedList storage self, address _node, bool _direction) internal  {
         insert(self, HEAD, _node, _direction);
-    }
-
-    function pop(LinkedList storage self, bool _direction) internal returns (address) {
-        bool exists;
-        address adj;
-
-        (exists,adj) = getAdjacent(self, HEAD, _direction);
-
-        return remove(self, adj);
     }
 }

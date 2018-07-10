@@ -5,6 +5,7 @@ const BigNumber = require('bignumber.js')
 const MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 const ethAddresses = []
 const tokenSetting = init.tokenSetting
+const receiverSetting = init.receiverSetting
 let tokenInstance
 let receiverInstance
 let fakeReceiverInstance
@@ -125,18 +126,18 @@ contract('Receiver', accounts => {
         const tmp = []
         const svalue = 100 * 10 ** init.tokenSetting.decimals
 
-        tmp.push(parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf()))
         tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[1])).valueOf()))
+        tmp.push(parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf()))
 
         const transferReceiver = await receiverInstance.transfer(ethAddresses[1], svalue, { from: ethAddresses[0] })
 
         tmp.push(transferReceiver['logs'][0]['args']['_newtokens'])
         tmp.push(transferReceiver['logs'][1]['args']['_newtokens'])
 
-        tmp.push(parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf()))
         tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[1])).valueOf()))
+        tmp.push(parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf()))
 
-        const ideal = [tmp[0], tmp[1], svalue, svalue, tmp[0] - svalue, tmp[1] + svalue]
+        const ideal = [tmp[0], tmp[1], svalue, svalue, tmp[0] + svalue, tmp[1] - svalue]
         const result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
@@ -145,24 +146,29 @@ contract('Receiver', accounts => {
     it('(Working Receiver) Buying token... (no success)', async () => {
         let tmpCommon = []
         const idealCommon = []
-        const svalue = 0.01
+        const svalue = 0.5
         const mantiss = 1000000000000000000
         for (let j = 0; j < 2; j++) {
             for (let i = 0; i < ethAddresses.length; i++) {
                 const tmp = []
                 const ideal = []
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+                if(i !== 0 ) {
+                    const hex = '0x01234' + i
+                    await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {from: ethAddresses[0]})
+                }
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[ i === 0 ? 0 : i - 1])).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
                 await web3.personal.unlockAccount(ethAddresses[i], '')
 
-                await receiverInstance.sendTransaction({
+                const send = await receiverInstance.sendTransaction({
                     from: ethAddresses[i],
                     value: web3.toWei(svalue * (i + 1), 'ether'),
+                    data: i === 0 ? '' : '0x01234' + i
                 })
 
                 tmp.push((await receiverInstance.calculateTokenCount(web3.toWei(svalue * (i + 1), 'ether'))).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[ i === 0 ? 0 : i - 1])).valueOf())
                 tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
 
                 let floorTmp = new BigNumber(svalue * (i + 1))
@@ -170,7 +176,20 @@ contract('Receiver', accounts => {
                     .div(tmp[5])
                     .integerValue(BigNumber.ROUND_FLOOR)
 
-                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).plus(floorTmp), tmp[4], tmp[5])
+                let referalBalance = new BigNumber(tmp[1]).plus(floorTmp)
+                let refererBalance = new BigNumber(i === 0 ? tmp[4] : tmp[0])
+
+                if(i !== 0) {
+                    const referalFee = floorTmp.div(100).integerValue(BigNumber.ROUND_FLOOR).multipliedBy(receiverSetting.referalBonus).integerValue(BigNumber.ROUND_FLOOR)
+                    const refererFee = floorTmp.div(100).integerValue(BigNumber.ROUND_FLOOR).multipliedBy(receiverSetting.refererBonus).integerValue(BigNumber.ROUND_FLOOR)
+                    referalBalance = referalBalance.plus(referalFee)
+                    if(i - 1 !== 0) {
+                        refererBalance = refererBalance.plus(refererFee)
+                    } else {
+                        refererBalance = tmp[4]
+                    }
+                }
+                ideal.push(tmp[0], tmp[1], floorTmp, referalBalance, refererBalance, tmp[5])
                 idealCommon.push(...ideal)
                 tmpCommon = tmpCommon.concat(tmp)
             }
@@ -183,6 +202,7 @@ contract('Receiver', accounts => {
     it('(Working Receiver) Buying token... [stress-test]', async () => {
         const tmp = []
         const svalue = 1000500000000
+        const correctValue = 0.5
 
         tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
@@ -193,8 +213,14 @@ contract('Receiver', accounts => {
                 tmp.push(true)
             })
 
+        await receiverInstance
+            .sendTransaction({ from: ethAddresses[0], value: web3.toWei(correctValue, 'ether'), data: ethAddresses[0] })
+            .catch(err => {
+                tmp.push(true)
+            })
+
         tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
-        const ideal = [tmp[0], tmp[1], true, tmp[1]]
+        const ideal = [tmp[0], tmp[1], true, true, tmp[1]]
         const result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
@@ -275,6 +301,8 @@ contract('Receiver', accounts => {
                 init.receiverSetting.softCap,
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
+                init.receiverSetting.referalBonus,
+                init.receiverSetting.refererBonus,
                 true,
                 { from: ethAddresses[1] },
             )
@@ -288,6 +316,8 @@ contract('Receiver', accounts => {
                 init.receiverSetting.softCap,
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
+                init.receiverSetting.referalBonus,
+                init.receiverSetting.refererBonus,
                 true,
                 { from: ethAddresses[0] },
             ))['logs'][0]['args']['_version'].valueOf(),
@@ -414,6 +444,8 @@ contract('Receiver', accounts => {
                 init.receiverSetting.softCap,
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
+                init.receiverSetting.referalBonus,
+                init.receiverSetting.refererBonus,
                 true,
                 { from: ethAddresses[0] },
             ))['logs'][0]['args']['_version'].valueOf(),

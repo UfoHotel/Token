@@ -11,6 +11,7 @@ const symbol = 'UHC'
 const decimals = 4
 const totalSupply = 936000000 * 10 ** decimals
 const transferFeePercent = 3
+const transferReferFeePercent = 1
 
 //ReceiverSetting
 const startTime = utils.time(new Date())
@@ -19,6 +20,9 @@ const weiPerMinToken = 405188826977925
 const softCap = 26000000 * 10 ** decimals
 const durationOfStatusSell = 3 * 30 * 24 * 60 * 60;//3 months
 const statusMinBorders = [24999, 99999, 349999, 1299999]
+const referalBonus = 5
+const refererBonus = 5
+
 
 const initTokens = 27000000 * 10 ** decimals
 
@@ -64,19 +68,19 @@ const initAccounts = async initAcc => {
 
 const initToken = async address => {
     await web3.personal.unlockAccount(address, '')
-    return Token.new(name, symbol, decimals, totalSupply, transferFeePercent, { from: address })
+    return Token.new(name, symbol, decimals, totalSupply, transferFeePercent, transferReferFeePercent, { from: address })
 }
 
 const initReceiver = async (tokenInstance, address) => {
     await web3.personal.unlockAccount(address, '')
-    return Receiver.new(tokenInstance.address, startTime, weiPerMinToken, softCap, durationOfStatusSell, statusMinBorders, true, {
+    return Receiver.new(tokenInstance.address, startTime, weiPerMinToken, softCap, durationOfStatusSell, statusMinBorders, referalBonus, refererBonus, true, {
         from: address,
     })
 }
 //Для проверки ресивера, который закончился
 const initFinishedReceiver = async (tokenInstance, address, isWithdraw = true) => {
     await web3.personal.unlockAccount(address, '')
-    return Receiver.new(tokenInstance.address, fakeStartTime, weiPerMinToken, isWithdraw ? softCap : 0, durationOfStatusSell, statusMinBorders, false, {
+    return Receiver.new(tokenInstance.address, fakeStartTime, weiPerMinToken, isWithdraw ? softCap : 0, durationOfStatusSell, statusMinBorders, referalBonus, refererBonus, false, {
         from: address,
     })
 }
@@ -106,6 +110,7 @@ const tokenSetting = {
     decimals,
     totalSupply,
     transferFeePercent,
+    transferReferFeePercent,
     sendValueWei,
     sendTokenValue,
 }
@@ -117,6 +122,8 @@ const receiverSetting = {
     softCap,
     durationOfStatusSell,
     statusMinBorders,
+    referalBonus,
+    refererBonus,
     balance: softCap * 1.1,
 }
 

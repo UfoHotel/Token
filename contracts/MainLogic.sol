@@ -1,4 +1,4 @@
-pragma solidity ^0.4.23;
+pragma solidity ^0.4.24;
 
 import "./SafeMath.sol";
 import "./UHCToken.sol";
@@ -81,7 +81,7 @@ contract MainLogic {
         accounts[owner].currentWeekCount = 0;
     }
 
-    function isPeriodOpen(uint256 house, uint256 room,uint256 weekStart, uint256 weekCount) internal constant returns(bool) {
+    function isPeriodOpen(uint256 house, uint256 room,uint256 weekStart, uint256 weekCount) internal view returns(bool) {
         for(uint256 i = weekStart; i < weekStart + weekCount; i++){
             if(houses[house][room][i].owner != 0x0){
                 return false;

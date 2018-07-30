@@ -1,14 +1,15 @@
-pragma solidity ^0.4.23;
+pragma solidity ^0.4.24;
 
 import "./SafeMath.sol";
 import "./ERC20.sol";
-import "./RingList.sol";
+import "./AddressSet.sol";
 
 contract UHCToken is ERC20 {
     using SafeMath for uint256;
-    using RingList for RingList.LinkedList;
+    using AddressSet for AddressSet.Instance;
 
     address public owner;
+    address public subowner;
 
     bool    public              paused         = false;
     bool    public              contractEnable = true;
@@ -25,36 +26,35 @@ contract UHCToken is ERC20 {
         uint8 group;
         uint8 status;
         address referer;
+        bool isBlocked;
     }
 
     mapping(address => account)                      private   accounts;
     mapping(address => mapping (address => uint256)) private   allowed;
     mapping(bytes => address)                        private   promos;
 
-    RingList.LinkedList                              private   holders;
+    AddressSet.Instance                             private   holders;
 
     struct groupPolicy {
         uint8 _default;
         uint8 _backend;
         uint8 _admin;
-        uint8 _migration;
-        uint8 _subowner;
         uint8 _owner;
     }
 
-    groupPolicy public groupPolicyInstance = groupPolicy(0, 3, 4, 9, 2, 9);
+    groupPolicy public groupPolicyInstance = groupPolicy(0, 3, 4, 9);
 
     event EvGroupChanged(address indexed _address, uint8 _oldgroup, uint8 _newgroup);
     event EvMigration(address indexed _address, uint256 _balance, uint256 _secret);
     event EvUpdateStatus(address indexed _address, uint8 _oldstatus, uint8 _newstatus);
-    event EvUpdateReferer(address indexed _referal, address _oldreferer, address _newreferer);
+    event EvSetReferer(address indexed _referal, address _referer);
     event SwitchPause(bool isPaused);
 
     constructor (string _name, string _symbol, uint8 _decimals,uint256 _summarySupply, uint8 _transferFeePercent, uint8 _refererFeePercent) public {
         require(_refererFeePercent < _transferFeePercent);
         owner = msg.sender;
 
-        accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0));
+        accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0), false);
 
         holders.push(msg.sender, true);
         name = _name;
@@ -66,18 +66,13 @@ contract UHCToken is ERC20 {
         emit Transfer(address(0), msg.sender, _summarySupply);
     }
 
-    modifier onlyPayloadSize(uint size) {
-        assert(msg.data.length >= size + 4);
-        _;
-    }
-
     modifier minGroup(int _require) {
         require(accounts[msg.sender].group >= _require);
         _;
     }
 
-    modifier onlyGroup(int _require) {
-        require(accounts[msg.sender].group == _require);
+    modifier onlySubowner() {
+        require(msg.sender == subowner);
         _;
     }
 
@@ -88,6 +83,16 @@ contract UHCToken is ERC20 {
 
     modifier whenPaused() {
         require(paused);
+        _;
+    }
+
+    modifier whenNotMigrating {
+        require(contractEnable);
+        _;
+    }
+
+    modifier whenMigrating {
+        require(!contractEnable);
         _;
     }
 
@@ -103,25 +108,24 @@ contract UHCToken is ERC20 {
 
     function serviceGroupChange(address _address, uint8 _group) minGroup(groupPolicyInstance._admin) external returns(uint8) {
         require(_address != address(0));
+        require(_group <= groupPolicyInstance._admin);
 
         uint8 old = accounts[_address].group;
-        if(old <= groupPolicyInstance._admin) {
-            accounts[_address].group = _group;
-            emit EvGroupChanged(_address, old, _group);
-        }
+        require(old < accounts[msg.sender].group);
+
+        accounts[_address].group = _group;
+        emit EvGroupChanged(_address, old, _group);
+
         return accounts[_address].group;
     }
 
     function serviceTransferOwnership(address newOwner) minGroup(groupPolicyInstance._owner) external {
         require(newOwner != address(0));
 
-        uint8 newOwnerGroup = accounts[newOwner].group;
-        accounts[newOwner].group = groupPolicyInstance._subowner;
-        accounts[msg.sender].group = groupPolicyInstance._subowner;
-        emit EvGroupChanged(newOwner, newOwnerGroup, groupPolicyInstance._subowner);
+        subowner = newOwner;
     }
 
-    function serviceClaimOwnership() onlyGroup(groupPolicyInstance._subowner) external {
+    function serviceClaimOwnership() onlySubowner() external {
         address temp = owner;
         uint256 value = accounts[owner].balance;
 
@@ -131,66 +135,22 @@ contract UHCToken is ERC20 {
         holders.push(msg.sender, true);
 
         owner = msg.sender;
+        subowner = address(0);
 
         delete accounts[temp].group;
+        uint8 oldGroup = accounts[msg.sender].group;
         accounts[msg.sender].group = groupPolicyInstance._owner;
 
-        emit EvGroupChanged(msg.sender, groupPolicyInstance._subowner, groupPolicyInstance._owner);
+        emit EvGroupChanged(msg.sender, oldGroup, groupPolicyInstance._owner);
         emit Transfer(temp, owner, value);
     }
 
-    function serviceIncreaseBalance(address _who, uint256 _value) minGroup(groupPolicyInstance._admin) external returns(bool) {
-        require(_who != address(0));
-        require(_value > 0);
+    function serviceSwitchTransferAbility(address _address) external minGroup(groupPolicyInstance._admin) returns(bool) {
+        require(accounts[_address].group < accounts[msg.sender].group);
 
-        accounts[_who].balance = accounts[_who].balance.add(_value);
-        summarySupply = summarySupply.add(_value);
-        holders.push(_who, true);
-        emit Transfer(address(0), _who, _value);
+        accounts[_address].isBlocked = !accounts[_address].isBlocked;
+
         return true;
-    }
-
-    function serviceDecreaseBalance(address _who, uint256 _value) minGroup(groupPolicyInstance._admin) external returns(bool) {
-        require(_who != address(0));
-        require(_value > 0);
-        require(accounts[_who].balance >= _value);
-
-        accounts[_who].balance = accounts[_who].balance.sub(_value);
-        summarySupply = summarySupply.sub(_value);
-        if(accounts[_who].balance == 0){
-            holders.remove(_who);
-        }
-        emit Transfer(_who, address(0), _value);
-        return true;
-    }
-
-    function serviceRedirect(address _from, address _to, uint256 _value) minGroup(groupPolicyInstance._admin) external returns(bool){
-        require(_from != address(0));
-        require(_to != address(0));
-        require(_value > 0);
-        require(accounts[_from].balance >= _value);
-        require(_from != _to);
-
-        accounts[_from].balance = accounts[_from].balance.sub(_value);
-        if(accounts[_from].balance == 0){
-            holders.remove(_from);
-        }
-        accounts[_to].balance = accounts[_to].balance.add(_value);
-        holders.push(_to, true);
-        emit Transfer(_from, _to, _value);
-        return true;
-    }
-
-    function serviceTokensBurn(address _address) external minGroup(groupPolicyInstance._admin) returns(uint256 balance) {
-        require(_address != address(0));
-        require(accounts[_address].balance > 0);
-
-        uint256 sum = accounts[_address].balance;
-        accounts[_address].balance = 0;
-        summarySupply = summarySupply.sub(sum);
-        holders.remove(_address);
-        emit Transfer(_address, address(0), sum);
-        return accounts[_address].balance;
     }
 
     function serviceUpdateTransferFeePercent(uint8 newFee) external minGroup(groupPolicyInstance._admin) {
@@ -221,14 +181,14 @@ contract UHCToken is ERC20 {
     }
 
     function backendSetReferer(address _referal, address _referer) external minGroup(groupPolicyInstance._backend) returns(bool) {
+        require(accounts[_referal].referer == address(0));
         require(_referal != address(0));
         require(_referal != _referer);
         require(accounts[_referal].referer != _referer);
 
-        address oldReferer = accounts[_referal].referer;
         accounts[_referal].referer = _referer;
 
-        emit EvUpdateReferer(_referal, oldReferer, _referer);
+        emit EvSetReferer(_referal, _referer);
 
         return true;
     }
@@ -246,41 +206,47 @@ contract UHCToken is ERC20 {
         return true;
     }
 
-    function getGroup(address _check) external constant returns(uint8 _group) {
+    function getGroup(address _check) external view returns(uint8 _group) {
         return accounts[_check].group;
     }
 
-    function getHoldersLength() external constant returns(uint256){
+    function getHoldersLength() external view returns(uint256){
         return holders.sizeOf();
     }
 
-    function getHolderLink(address _holder) external constant returns(bool, address, address){
-        return holders.getNode(_holder);
+    function getHolderByIndex(uint256 _index) external view returns(address){
+        return holders.getAddress(_index);
     }
 
-    function getPromoAddress(bytes _promo) external minGroup(groupPolicyInstance._backend) constant returns(address) {
+    function getPromoAddress(bytes _promo) external view returns(address) {
         return promos[_promo];
     }
 
-    function transfer(address _to, uint256 _value) onlyPayloadSize(64) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
+    function getAddressTransferAbility(address _check) external view returns(bool) {
+        return !accounts[_check].isBlocked;
+    }
+
+    function transfer(address _to, uint256 _value) external returns (bool success) {
         return _transfer(msg.sender, _to, address(0), _value);
     }
 
-    function transferFrom(address _from, address _to, uint256 _value) onlyPayloadSize(64) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
+    function transferFrom(address _from, address _to, uint256 _value) external returns (bool success) {
         return _transfer(_from, _to, msg.sender, _value);
     }
 
-    function _transfer(address _from, address _to, address _allow, uint256 _value) internal returns(bool) {
+    function _transfer(address _from, address _to, address _allow, uint256 _value) minGroup(groupPolicyInstance._default) whenNotMigrating whenNotPaused internal returns(bool) {
+        require(!accounts[_from].isBlocked);
         require(_from != address(0));
         require(_to != address(0));
         uint256 transferFee = accounts[_from].group == 0 ? _value.div(100).mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent) : 0;
         uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group == 0 ? 0 : _value.div(100).mul(refererFeePercent);
-        require(accounts[_from].balance >= _value + transferFee + transferRefererFee);
-        require(_allow == address(0) || allowed[_from][_allow] >= _value + transferFee + transferRefererFee);
+        uint256 summaryValue = _value.add(transferFee).add(transferRefererFee);
+        require(accounts[_from].balance >= summaryValue);
+        require(_allow == address(0) || allowed[_from][_allow] >= summaryValue);
 
-        accounts[_from].balance = accounts[_from].balance.sub(_value + transferFee + transferRefererFee);
+        accounts[_from].balance = accounts[_from].balance.sub(summaryValue);
         if(_allow != address(0)) {
-            allowed[_from][_allow] = allowed[_from][_allow].sub(_value + transferFee + transferRefererFee);
+            allowed[_from][_allow] = allowed[_from][_allow].sub(summaryValue);
         }
 
         if(accounts[_from].balance == 0){
@@ -303,34 +269,47 @@ contract UHCToken is ERC20 {
         return true;
     }
 
-    function approve(address _spender, uint256 _old, uint256 _new) onlyPayloadSize(64) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
-        require (_old == allowed[msg.sender][_spender]);
+    function approve(address _spender, uint256 _value) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
+        require (_value == 0 || allowed[msg.sender][_spender] == 0);
         require(_spender != address(0));
 
-        allowed[msg.sender][_spender] = _new;
-        emit Approval(msg.sender, _spender, _new);
+        allowed[msg.sender][_spender] = _value;
+        emit Approval(msg.sender, _spender, _value);
         return true;
     }
 
-    function allowance(address _owner, address _spender) external constant returns (uint256 remaining) {
+    function increaseApproval(address _spender, uint256 _addedValue) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool)
+    {
+        allowed[msg.sender][_spender] = (allowed[msg.sender][_spender].add(_addedValue));
+        emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+        return true;
+    }
+
+    function decreaseApproval(address _spender, uint256 _subtractedValue) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool)
+    {
+        uint256 oldValue = allowed[msg.sender][_spender];
+        if (_subtractedValue > oldValue) {
+            allowed[msg.sender][_spender] = 0;
+        } else {
+            allowed[msg.sender][_spender] = oldValue.sub(_subtractedValue);
+        }
+        emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
+        return true;
+    }
+
+    function allowance(address _owner, address _spender) external view returns (uint256 remaining) {
         return allowed[_owner][_spender];
     }
 
-    function balanceOf(address _owner) external constant returns (uint256 balance) {
-        if (_owner == address(0))
-            return accounts[msg.sender].balance;
+    function balanceOf(address _owner) external view returns (uint256 balance) {
         return accounts[_owner].balance;
     }
 
-    function statusOf(address _owner) external constant returns (uint8) {
-        if (_owner == address(0))
-            return accounts[msg.sender].status;
+    function statusOf(address _owner) external view returns (uint8) {
         return accounts[_owner].status;
     }
 
     function refererOf(address _owner) external constant returns (address) {
-        if (_owner == address(0))
-            return accounts[msg.sender].referer;
         return accounts[_owner].referer;
     }
 
@@ -338,26 +317,14 @@ contract UHCToken is ERC20 {
         _totalSupply = summarySupply;
     }
 
-    function destroy() minGroup(groupPolicyInstance._owner) external {
-        selfdestruct(msg.sender);
-    }
-
     function settingsSwitchState() external minGroup(groupPolicyInstance._owner) returns (bool state) {
 
-        if(contractEnable) {
-            groupPolicyInstance._default = 9;
-            groupPolicyInstance._migration = 0;
-            contractEnable = false;
-        } else {
-            groupPolicyInstance._default = 0;
-            groupPolicyInstance._migration = 9;
-            contractEnable = true;
-        }
+        contractEnable = !contractEnable;
 
         return contractEnable;
     }
 
-    function userMigration(uint256 _secrect) external minGroup(groupPolicyInstance._migration) returns (bool successful) {
+    function userMigration(uint256 _secret) external whenMigrating returns (bool successful) {
         uint256 balance = accounts[msg.sender].balance;
 
         require (balance > 0);
@@ -366,7 +333,7 @@ contract UHCToken is ERC20 {
         holders.remove(msg.sender);
         accounts[owner].balance = accounts[owner].balance.add(balance);
         holders.push(owner, true);
-        emit EvMigration(msg.sender, balance, _secrect);
+        emit EvMigration(msg.sender, balance, _secret);
         emit Transfer(msg.sender, owner, balance);
         return true;
     }

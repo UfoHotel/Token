@@ -1,4 +1,4 @@
-pragma solidity ^0.4.23;
+pragma solidity ^0.4.24;
 
 import "./SafeMath.sol";
 import "./UHCToken.sol";
@@ -132,10 +132,6 @@ contract EtherReceiver {
         weiPerMinToken = _weiPerMinToken;
     }
 
-    function destroy() external onlyOwner() {
-        selfdestruct(token.owner());
-    }
-
     function withdraw() external {
         require(!isActive && soldOnVersion[version] < softcap);
 
@@ -233,21 +229,15 @@ contract EtherReceiver {
         }
     }
 
-    function bytesToAddress(bytes bys) private pure returns (address addr) {
-        assembly {
-            addr := mload(add(bys,20))
-        }
-    }
-
     function calculateTokenCount(uint256 weiAmount) external constant returns(uint256 summary){
         return weiAmount.div(weiPerMinToken);
     }
 
-    function isSelling() external constant returns(bool){
+    function isSelling() external view returns(bool){
         return now > startTime && soldOnVersion[version] < softcap && isActive;
     }
 
-    function getGroup(address _check) external constant returns(uint8 _group) {
+    function getGroup(address _check) external view returns(uint8 _group) {
         return group[_check];
     }
 }

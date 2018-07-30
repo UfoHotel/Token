@@ -201,7 +201,7 @@ contract('Receiver', accounts => {
     })
     it('(Working Receiver) Buying token... [stress-test]', async () => {
         const tmp = []
-        const svalue = 1000500000000
+        const svalue = 1000500000000000
         const correctValue = 0.5
 
         tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
@@ -213,8 +213,10 @@ contract('Receiver', accounts => {
                 tmp.push(true)
             })
 
+        await tokenInstance.serviceSetPromo(123, ethAddresses[0], {from: ethAddresses[0]})
+
         await receiverInstance
-            .sendTransaction({ from: ethAddresses[0], value: web3.toWei(correctValue, 'ether'), data: ethAddresses[0] })
+            .sendTransaction({ from: ethAddresses[0], value: web3.toWei(correctValue, 'ether'), data: 123 })
             .catch(err => {
                 tmp.push(true)
             })

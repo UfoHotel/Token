@@ -4,10 +4,15 @@
     "compile": "truffle compile",
     "migrate": "truffle migrate",
     "testToken": "truffle test ./test/token.js",
-    "testReceiver": "truffle test ./test/receiver.js"
+    "testReceiver": "truffle test ./test/receiver.js",
+    "prettier": "prettier --write *.js migrations/*.js test/*.js"
   },
   "dependencies": {
     "axios": "^0.18.0",
-    "bignumber.js": "^7.2.1"
+    "bignumber.js": "^7.2.1",
+    "bitcoin-core": "^2.0.0"
+  },
+  "devDependencies": {
+    "prettier": "^1.14.2"
   }
 }

@@ -70,11 +70,9 @@ contract('UHC token', accounts => {
         })
 
         await web3.personal.unlockAccount(ethAddresses[1], '')
-        await tokenInstance.serviceSwitchTransferAbility
-            .call(ethAddresses[1], { from: ethAddresses[1] })
-            .catch(err => {
-                tmp[1] = true
-            })
+        await tokenInstance.serviceSwitchTransferAbility.call(ethAddresses[1], { from: ethAddresses[1] }).catch(err => {
+            tmp[1] = true
+        })
 
         let ideal = [true, true]
         let result = utils.validateValues(tmp, ideal)
@@ -89,7 +87,7 @@ contract('UHC token', accounts => {
         //Curret group
         tmp.push((await tokenInstance.getGroup.call(ethAddresses[1])).valueOf())
         //Set new owner. Now it will be subowner group
-            await tokenInstance.serviceTransferOwnership(ethAddresses[1], { from: ethAddresses[0] })
+        await tokenInstance.serviceTransferOwnership(ethAddresses[1], { from: ethAddresses[0] })
         //Another test for subowner
         tmp.push((await tokenInstance.getGroup.call(ethAddresses[0])).valueOf())
         //Another test for subowner
@@ -170,7 +168,7 @@ contract('UHC token', accounts => {
             tmp[0] - svalue,
             tmp[1] + svalue,
             svalue / 2,
-            tmp[1] + svalue / 2 * (1 - tmp[2] / 100),
+            tmp[1] + (svalue / 2) * (1 - tmp[2] / 100),
         ]
         let result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
@@ -191,17 +189,13 @@ contract('UHC token', accounts => {
             ],
         )
         tmp.push((await tokenInstance.allowance(ethAddresses[2], ethAddresses[1])).valueOf())
-        const transfer = (await tokenInstance.transferFrom(ethAddresses[2], ethAddresses[1], subvalue, { from: ethAddresses[1] }))[
-            'logs'
-            ]
+        const transfer = (await tokenInstance.transferFrom(ethAddresses[2], ethAddresses[1], subvalue, {
+            from: ethAddresses[1],
+        }))['logs']
         // push transfer event
-        tmp.push(
-            transfer[0]['args']['_value'],
-        )
+        tmp.push(transfer[0]['args']['_value'])
         // push transfer event (contract fee)
-        tmp.push(
-            transfer[1]['args']['_value'],
-        )
+        tmp.push(transfer[1]['args']['_value'])
         tmp.push((await tokenInstance.allowance.call(ethAddresses[2], ethAddresses[1])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
         tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
@@ -213,7 +207,7 @@ contract('UHC token', accounts => {
             value,
             value,
             subvalue,
-            subvalue/100 * tmp[2],
+            (subvalue / 100) * tmp[2],
             value - subvalue * (1 + tmp[2] / 100),
             tmp[0] - subvalue * (1 + tmp[2] / 100),
             new BigNumber(tmp[1]).plus(subvalue),
@@ -233,29 +227,24 @@ contract('UHC token', accounts => {
         tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
         await web3.personal.unlockAccount(ethAddresses[1], '')
         //Try approve second time(non-zero value) throw exception
-        await tokenInstance.approve(ethAddresses[1], value, { from: ethAddresses[0] }).catch(err => {tmp.push(true)})
+        await tokenInstance.approve(ethAddresses[1], value, { from: ethAddresses[0] }).catch(err => {
+            tmp.push(true)
+        })
         //Increase approve on value
         tmp.push(
-            (await tokenInstance.increaseApproval(ethAddresses[1], value, { from: ethAddresses[0] }))[
-                'logs'
-                ][0]['args']['_value'],
+            (await tokenInstance.increaseApproval(ethAddresses[1], value, { from: ethAddresses[0] }))['logs'][0][
+                'args'
+            ]['_value'],
         )
         tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
         //Decrease approve on value
         tmp.push(
             (await tokenInstance.decreaseApproval(ethAddresses[1], value + tmp[0], { from: ethAddresses[0] }))[
                 'logs'
-                ][0]['args']['_value'],
+            ][0]['args']['_value'],
         )
         tmp.push((await tokenInstance.allowance(ethAddresses[0], ethAddresses[1])).valueOf())
-        const ideal = [
-            tmp[0],
-            true,
-            parseInt(tmp[0]) + parseInt(value),
-            parseInt(tmp[0]) + parseInt(value),
-            0,
-            0
-        ]
+        const ideal = [tmp[0], true, parseInt(tmp[0]) + parseInt(value), parseInt(tmp[0]) + parseInt(value), 0, 0]
         let result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
@@ -289,13 +278,9 @@ contract('UHC token', accounts => {
             })
 
         await web3.personal.unlockAccount(ethAddresses[3], '')
-        await tokenInstance.approve(
-            ethAddresses[1],
-            svalue * (1 + tokenSetting.transferFeePercent / 100),
-            {
-                from: ethAddresses[3],
-            },
-        )
+        await tokenInstance.approve(ethAddresses[1], svalue * (1 + tokenSetting.transferFeePercent / 100), {
+            from: ethAddresses[3],
+        })
 
         tmp.push((await tokenInstance.allowance(ethAddresses[3], ethAddresses[1])).valueOf())
 
@@ -349,16 +334,15 @@ contract('UHC token', accounts => {
         const svalue = 100 * 10 ** tokenSetting.decimals
         await web3.personal.unlockAccount(ethAddresses[0], '')
         tmp.push((await tokenInstance.getAddressTransferAbility(ethAddresses[1])).valueOf())
-        await tokenInstance.serviceSwitchTransferAbility(ethAddresses[1], {from: ethAddresses[0]})
+        await tokenInstance.serviceSwitchTransferAbility(ethAddresses[1], { from: ethAddresses[0] })
         tmp.push((await tokenInstance.getAddressTransferAbility(ethAddresses[1])).valueOf())
-
 
         await tokenInstance.transfer(ethAddresses[2], svalue, { from: ethAddresses[1] }).catch(e => {
             tmp.push(true)
         })
 
-        const ideal = [true,false, true]
-        console.log(utils.tableEqual(tmp,ideal,true))
+        const ideal = [true, false, true]
+        console.log(utils.tableEqual(tmp, ideal, true))
         let result = utils.validateValues(tmp, ideal)
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
@@ -374,35 +358,31 @@ contract('UHC token', accounts => {
         const startOwnerBalance = await tokenInstance.balanceOf(ethAddresses[0])
         let sum = 0
         const holders = []
-        const holderLength = (await
-                tokenInstance.getHoldersLength()
-        ).valueOf()
-        
+        const holderLength = (await tokenInstance.getHoldersLength()).valueOf()
+
         for (let i = 0; i < holderLength; i++) {
-            const address = (await
-                    tokenInstance.getHolderByIndex(i)
-            ).valueOf()
+            const address = (await tokenInstance.getHolderByIndex(i)).valueOf()
             holders.push({
                 address: address,
-                balance: (await tokenInstance.balanceOf(address)).valueOf()
+                balance: (await tokenInstance.balanceOf(address)).valueOf(),
             })
         }
 
         for (let i = 0; i < holderLength; i++) {
-            if(holders[i].address === ethAddresses[0]){
+            if (holders[i].address === ethAddresses[0]) {
                 continue
             }
             await web3.personal.unlockAccount(holders[i].address, '')
             sum += parseInt(
-                (await tokenInstance.userMigration('123', {from: holders[i].address}))['logs'][0]['args']['_balance'],
+                (await tokenInstance.userMigration('123', { from: holders[i].address }))['logs'][0]['args']['_balance'],
             )
         }
 
         const endOwnerBalance = await tokenInstance.balanceOf(ethAddresses[0])
         const ideal = [false, startOwnerBalance.add(sum).toString()]
-            tmp.push(endOwnerBalance.toString())
+        tmp.push(endOwnerBalance.toString())
 
-        console.log(utils.tableEqual(tmp,ideal,true))
+        console.log(utils.tableEqual(tmp, ideal, true))
         let result = utils.validateValues(tmp, ideal)
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })

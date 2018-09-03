@@ -13,8 +13,7 @@ library AddressSet {
 
     // _direction parameter is kept for drop-in replacement consistency; consider remove the parameter
     // Gas efficient version of push
-    function push(Instance storage self, address addr, bool _direction) internal returns (bool) {
-        require(_direction == true); // implement only NEXT direction case
+    function push(Instance storage self, address addr) internal returns (bool) {
         if (self.idx[addr] != 0) return false;
         self.idx[addr] = self.list.push(addr);
         return true;

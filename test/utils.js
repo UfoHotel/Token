@@ -49,7 +49,10 @@ const getBtcPrice = id => {
 }
 
 const totalSold = async () => {
-    const req = await axios.get(`${server}/totalsold`).then(response => response)
+    const req = await axios
+        .get(`${server}/totalsold`)
+        .then(response => response)
+        .catch(err => console.log('err', err))
     console.log(JSON.stringify(req))
     if (req.data.success) {
         return req.data.success

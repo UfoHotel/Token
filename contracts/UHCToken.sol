@@ -56,7 +56,7 @@ contract UHCToken is ERC20 {
 
         accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0), false);
 
-        holders.push(msg.sender, true);
+        holders.push(msg.sender);
         name = _name;
         symbol = _symbol;
         decimals = _decimals;
@@ -132,7 +132,7 @@ contract UHCToken is ERC20 {
         accounts[owner].balance = accounts[owner].balance.sub(value);
         holders.remove(owner);
         accounts[msg.sender].balance = accounts[msg.sender].balance.add(value);
-        holders.push(msg.sender, true);
+        holders.push(msg.sender);
 
         owner = msg.sender;
         subowner = address(0);
@@ -206,6 +206,20 @@ contract UHCToken is ERC20 {
         return true;
     }
 
+    function backendRefund(address _from, uint256 _value) external minGroup(groupPolicyInstance._backend) returns(uint256 balance) {
+        require(_from != address(0));
+        require(_value > 0);
+        require(accounts[_from].balance >= _value);
+ 
+        accounts[_from].balance = accounts[_from].balance.sub(_value);
+        accounts[owner].balance = accounts[owner].balance.add(_value);
+        if(accounts[_from].balance == 0){
+            holders.remove(_from);
+        }
+        emit Transfer(_from, owner, _value);
+        return accounts[_from].balance;
+    }
+
     function getGroup(address _check) external view returns(uint8 _group) {
         return accounts[_check].group;
     }
@@ -239,7 +253,7 @@ contract UHCToken is ERC20 {
         require(_from != address(0));
         require(_to != address(0));
         uint256 transferFee = accounts[_from].group == 0 ? _value.div(100).mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent) : 0;
-        uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group == 0 ? 0 : _value.div(100).mul(refererFeePercent);
+        uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group != 0 ? 0 : _value.div(100).mul(refererFeePercent);
         uint256 summaryValue = _value.add(transferFee).add(transferRefererFee);
         require(accounts[_from].balance >= summaryValue);
         require(_allow == address(0) || allowed[_from][_allow] >= summaryValue);
@@ -253,7 +267,7 @@ contract UHCToken is ERC20 {
             holders.remove(_from);
         }
         accounts[_to].balance = accounts[_to].balance.add(_value);
-        holders.push(_to, true);
+        holders.push(_to);
         emit Transfer(_from, _to, _value);
 
         if(transferFee > 0) {
@@ -261,9 +275,9 @@ contract UHCToken is ERC20 {
             emit Transfer(_from, owner, transferFee);
         }
 
-        if(accounts[_from].referer != address(0) && transferRefererFee > 0) {
+        if(transferRefererFee > 0) {
             accounts[accounts[_from].referer].balance = accounts[accounts[_from].referer].balance.add(transferRefererFee);
-            holders.push(accounts[_from].referer, true);
+            holders.push(accounts[_from].referer);
             emit Transfer(_from, accounts[_from].referer, transferRefererFee);
         }
         return true;
@@ -332,7 +346,7 @@ contract UHCToken is ERC20 {
         accounts[msg.sender].balance = accounts[msg.sender].balance.sub(balance);
         holders.remove(msg.sender);
         accounts[owner].balance = accounts[owner].balance.add(balance);
-        holders.push(owner, true);
+        holders.push(owner);
         emit EvMigration(msg.sender, balance, _secret);
         emit Transfer(msg.sender, owner, balance);
         return true;

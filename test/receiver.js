@@ -49,18 +49,18 @@ contract('Receiver', accounts => {
         assert.ok(fakeReceiverInstance)
 
         tmp.push(
-            (await tokenInstance.serviceGroupChange(receiverInstance.address, 3, { from: ethAddresses[0] }))['logs'][0][
-                'args'
-            ]['_newgroup'].valueOf(),
+            (await tokenInstance.serviceGroupChange(receiverInstance.address, 3, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
         ideal.push(3)
         tmp.push((await receiverInstance.getGroup.call(ethAddresses[0])).valueOf())
         ideal.push(4)
 
         tmp.push(
-            (await tokenInstance.serviceGroupChange(fakeReceiverInstance.address, 3, { from: ethAddresses[0] }))[
-                'logs'
-            ][0]['args']['_newgroup'].valueOf(),
+            (await tokenInstance.serviceGroupChange(fakeReceiverInstance.address, 3, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
         ideal.push(3)
         tmp.push((await fakeReceiverInstance.getGroup.call(ethAddresses[0])).valueOf())
@@ -70,22 +70,27 @@ contract('Receiver', accounts => {
         ideal.push(init.receiverSetting.balance)
 
         let result = utils.validateValues(tmp, ideal)
+        console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
 
     it('Admin part... ', async () => {
         const tmp = []
         tmp.push(
-            (await receiverInstance.serviceGroupChange(ethAddresses[1], 4, { from: ethAddresses[0] }))['logs'][0][
-                'args'
-            ]['_newgroup'].valueOf(),
+            (await receiverInstance.serviceGroupChange(ethAddresses[1], 4, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
 
-        tmp.push((await receiverInstance.getGroup.call(ethAddresses[1], { from: ethAddresses[0] })).valueOf())
         tmp.push(
-            (await receiverInstance.serviceGroupChange(ethAddresses[1], 0, { from: ethAddresses[0] }))['logs'][0][
-                'args'
-            ]['_newgroup'].valueOf(),
+            (await receiverInstance.getGroup.call(ethAddresses[1], {
+                from: ethAddresses[0],
+            })).valueOf(),
+        )
+        tmp.push(
+            (await receiverInstance.serviceGroupChange(ethAddresses[1], 0, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
         tmp.push((await receiverInstance.getGroup.call(ethAddresses[1])).valueOf())
         await receiverInstance.setWeiPerMinToken(init.receiverSetting.weiPerMinToken * 2, { from: ethAddresses[0] })
@@ -112,7 +117,9 @@ contract('Receiver', accounts => {
 
         await web3.personal.unlockAccount(ethAddresses[2], '')
         await receiverInstance
-            .setWeiPerMinToken(init.receiverSetting.weiPerMinToken * 2, { from: ethAddresses[2] })
+            .setWeiPerMinToken(init.receiverSetting.weiPerMinToken * 2, {
+                from: ethAddresses[2],
+            })
             .catch(err => {
                 tmp[2] = true
             })
@@ -149,26 +156,28 @@ contract('Receiver', accounts => {
         const svalue = 0.5
         const mantiss = 1000000000000000000
         for (let j = 0; j < 2; j++) {
-            for (let i = 0; i < ethAddresses.length; i++) {
+            for (let i = 1; i < ethAddresses.length; i++) {
                 const tmp = []
                 const ideal = []
-                if(i !== 0 ) {
+                if (i !== 0) {
                     const hex = '0x01234' + i
-                    await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {from: ethAddresses[0]})
+                    await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {
+                        from: ethAddresses[0],
+                    })
                 }
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[ i === 0 ? 0 : i - 1])).valueOf())
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[i === 0 ? 0 : i - 1])).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
                 await web3.personal.unlockAccount(ethAddresses[i], '')
 
                 const send = await receiverInstance.sendTransaction({
                     from: ethAddresses[i],
                     value: web3.toWei(svalue * (i + 1), 'ether'),
-                    data: i === 0 ? '' : '0x01234' + i
+                    data: i === 0 ? '' : '0x01234' + i,
                 })
 
                 tmp.push((await receiverInstance.calculateTokenCount(web3.toWei(svalue * (i + 1), 'ether'))).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[ i === 0 ? 0 : i - 1])).valueOf())
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[i === 0 ? 0 : i - 1])).valueOf())
                 tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
 
                 let floorTmp = new BigNumber(svalue * (i + 1))
@@ -179,11 +188,19 @@ contract('Receiver', accounts => {
                 let referalBalance = new BigNumber(tmp[1]).plus(floorTmp)
                 let refererBalance = new BigNumber(i === 0 ? tmp[4] : tmp[0])
 
-                if(i !== 0) {
-                    const referalFee = floorTmp.div(100).integerValue(BigNumber.ROUND_FLOOR).multipliedBy(receiverSetting.referalBonus).integerValue(BigNumber.ROUND_FLOOR)
-                    const refererFee = floorTmp.div(100).integerValue(BigNumber.ROUND_FLOOR).multipliedBy(receiverSetting.refererBonus).integerValue(BigNumber.ROUND_FLOOR)
+                if (i !== 0) {
+                    const referalFee = floorTmp
+                        .div(100)
+                        .integerValue(BigNumber.ROUND_FLOOR)
+                        .multipliedBy(receiverSetting.referalBonus)
+                        .integerValue(BigNumber.ROUND_FLOOR)
+                    const refererFee = floorTmp
+                        .div(100)
+                        .integerValue(BigNumber.ROUND_FLOOR)
+                        .multipliedBy(receiverSetting.refererBonus)
+                        .integerValue(BigNumber.ROUND_FLOOR)
                     referalBalance = referalBalance.plus(referalFee)
-                    if(i - 1 !== 0) {
+                    if (i - 1 !== 0) {
                         refererBalance = refererBalance.plus(refererFee)
                     } else {
                         refererBalance = tmp[4]
@@ -208,15 +225,24 @@ contract('Receiver', accounts => {
         tmp.push((await tokenInstance.balanceOf(ethAddresses[2])).valueOf())
 
         await receiverInstance
-            .sendTransaction({ from: ethAddresses[3], value: web3.toWei(svalue, 'ether') })
+            .sendTransaction({
+                from: ethAddresses[3],
+                value: web3.toWei(svalue, 'ether'),
+            })
             .catch(err => {
                 tmp.push(true)
             })
 
-        await tokenInstance.serviceSetPromo(123, ethAddresses[0], {from: ethAddresses[0]})
+        await tokenInstance.serviceSetPromo(123, ethAddresses[0], {
+            from: ethAddresses[0],
+        })
 
         await receiverInstance
-            .sendTransaction({ from: ethAddresses[0], value: web3.toWei(correctValue, 'ether'), data: 123 })
+            .sendTransaction({
+                from: ethAddresses[0],
+                value: web3.toWei(correctValue, 'ether'),
+                data: 123,
+            })
             .catch(err => {
                 tmp.push(true)
             })
@@ -236,9 +262,9 @@ contract('Receiver', accounts => {
         tmpCommon.push((await receiverInstance.isSelling()).valueOf())
         //Switch active status
         tmpCommon.push(
-            (await receiverInstance.switchActivate({ from: ethAddresses[0] }))['logs'][0]['args'][
-                '_isActivate'
-            ].valueOf(),
+            (await receiverInstance.activateVersion(!(await receiverInstance.isActive()).valueOf(), {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_isActivate'].valueOf(),
         )
         tmpCommon.push((await receiverInstance.isSelling()).valueOf())
         await receiverInstance
@@ -247,39 +273,65 @@ contract('Receiver', accounts => {
                 init.receiverSetting.softCap,
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
+                init.receiverSetting.referalBonus,
+                init.receiverSetting.refererBonus,
+                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[0] },
             )
             .catch(e => {
                 tmpCommon.push(true)
             })
-        await receiverInstance.getWei({ from: ethAddresses[0] }).catch(e => {
+        await receiverInstance.withdraw({ from: ethAddresses[0] }).catch(e => {
             tmpCommon.push(true)
         })
         idealCommon.push(true, false, false, true, true)
 
-        for (let i = 0; i < ethAddresses.length; i++) {
+        for (let i = 1; i < ethAddresses.length; i++) {
             const tmp = []
             //Try transfer, return exception
             await receiverInstance.transfer(ethAddresses[i], tokenValue, { from: ethAddresses[0] }).catch(err => {
                 tmp.push(true)
             })
             await receiverInstance
-                .sendTransaction({ from: ethAddresses[i], value: web3.toWei(svalue, 'ether') })
+                .sendTransaction({
+                    from: ethAddresses[i],
+                    value: web3.toWei(svalue, 'ether'),
+                })
                 .catch(err => {
                     tmp.push(true)
                 })
-            //Try withdraw
+            //Try refund
             const accInfo = await receiverInstance.accounts(ethAddresses[i])
             const cap = (await receiverInstance.softcap()).valueOf()
             const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
-
-            tmp.push(!tmpCommon[1] && totalSold < cap && accInfo[0].gt(0))
+            const tokenBalanceBeforeRefund = (await tokenInstance.balanceOf(ethAddresses[i])).valueOf()
+            const referer = (await tokenInstance.refererOf(ethAddresses[i])).valueOf()
+            const refererBalanceBeforeRefund = (await tokenInstance.balanceOf(referer)).valueOf()
+            const statusBeforeRefund = (await tokenInstance.statusOf(ethAddresses[i])).valueOf()
+            tmp.push(!tmpCommon[1] && cap - totalSold > 0 && accInfo[0].gt(0))
             tmp.push(
-                (await receiverInstance.withdraw({ from: ethAddresses[i] }))['logs'][0]['args']['_spent'].valueOf(),
+                (await receiverInstance.refund({ from: ethAddresses[i] }))['logs'][0]['args']['_spent'].valueOf() - 1,
             )
-
-            idealCommon.push(true, true, true, accInfo[0])
+            //Проверка отката баланса
+            const tokenBalanceAfterRefund = (await tokenInstance.balanceOf(ethAddresses[i])).valueOf()
+            tmp.push(tokenBalanceBeforeRefund - tokenBalanceAfterRefund)
+            const refererBalanceAfterRefund = (await tokenInstance.balanceOf(referer)).valueOf()
+            tmp.push(
+                referer === ethAddresses[0] ? accInfo[6] - 1 : refererBalanceBeforeRefund - refererBalanceAfterRefund,
+            )
+            //Проверка отката статуса
+            const statusAfterRefund = (await tokenInstance.statusOf(ethAddresses[i])).valueOf()
+            tmp.push(statusAfterRefund)
+            idealCommon.push(
+                true,
+                true,
+                true,
+                accInfo[0],
+                accInfo[4] === 0 ? 0 : accInfo[4] - 1,
+                accInfo[6] === 0 ? 0 : accInfo[6] - 1,
+                accInfo[7],
+            )
             tmpCommon = tmpCommon.concat(tmp)
         }
 
@@ -292,10 +344,10 @@ contract('Receiver', accounts => {
         //Check conditions for refresh
         //no active
         tmp.push((await receiverInstance.isActive()).valueOf())
-        //success or withdraw all ether from current version
+        //success or refund all ether from current version
         const cap = (await receiverInstance.softcap()).valueOf()
         const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
-        tmp.push(totalSold < cap)
+        tmp.push(cap - totalSold > 0)
 
         await receiverInstance
             .refresh(
@@ -305,6 +357,7 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
                 init.receiverSetting.refererBonus,
+                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[1] },
             )
@@ -320,6 +373,7 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
                 init.receiverSetting.refererBonus,
+                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[0] },
             ))['logs'][0]['args']['_version'].valueOf(),
@@ -334,23 +388,24 @@ contract('Receiver', accounts => {
         let tmpCommon = []
         const idealCommon = []
         const svalue = 0.01
-        const mantiss = 1000000000000000000
+        const mantiss = 10 ** 18
+
         for (let j = 0; j < 2; j++) {
-            for (let i = 0; i < ethAddresses.length; i++) {
+            for (let i = 1; i < ethAddresses.length; i++) {
                 const tmp = []
                 const ideal = []
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
                 await web3.personal.unlockAccount(ethAddresses[i], '')
 
-                await receiverInstance.sendTransaction({
+                const send = await receiverInstance.sendTransaction({
                     from: ethAddresses[i],
                     value: web3.toWei(svalue * (i + 1), 'ether'),
                 })
 
                 tmp.push((await receiverInstance.calculateTokenCount(web3.toWei(svalue * (i + 1), 'ether'))).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+                tmp.push((await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf())
                 tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
 
                 let floorTmp = new BigNumber(svalue * (i + 1))
@@ -358,7 +413,27 @@ contract('Receiver', accounts => {
                     .div(tmp[5])
                     .integerValue(BigNumber.ROUND_FLOOR)
 
-                ideal.push(tmp[0], tmp[1], floorTmp, new BigNumber(tmp[1]).plus(floorTmp), tmp[4], tmp[5])
+                let referalBalance = new BigNumber(tmp[1]).plus(floorTmp)
+                let refererBalance = new BigNumber(tmp[0])
+
+                const referalFee = floorTmp
+                    .div(100)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                    .multipliedBy(receiverSetting.referalBonus)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                const refererFee = floorTmp
+                    .div(100)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                    .multipliedBy(receiverSetting.refererBonus)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                referalBalance = referalBalance.plus(referalFee)
+                if (i - 1 !== 0) {
+                    refererBalance = refererBalance.plus(refererFee)
+                } else {
+                    refererBalance = tmp[4]
+                }
+
+                ideal.push(tmp[0], tmp[1], floorTmp, referalBalance, refererBalance, tmp[5])
                 idealCommon.push(...ideal)
                 tmpCommon = tmpCommon.concat(tmp)
             }
@@ -382,46 +457,49 @@ contract('Receiver', accounts => {
         tmpCommon.push((await receiverInstance.isSelling()).valueOf())
         //Switch active status
         tmpCommon.push(
-            (await receiverInstance.switchActivate({ from: ethAddresses[0] }))['logs'][0]['args'][
-                '_isActivate'
-            ].valueOf(),
+            (await receiverInstance.activateVersion(!(await receiverInstance.isActive()).valueOf(), {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_isActivate'].valueOf(),
         )
         tmpCommon.push((await receiverInstance.isSelling()).valueOf())
         idealCommon.push(false, false, false)
 
-        for (let i = 0; i < ethAddresses.length; i++) {
+        for (let i = 1; i < ethAddresses.length; i++) {
             const tmp = []
             //Try transfer, return exception
             await receiverInstance.transfer(ethAddresses[i], tokenValue, { from: ethAddresses[0] }).catch(err => {
                 tmp.push(1)
             })
             await receiverInstance
-                .sendTransaction({ from: ethAddresses[i], value: web3.toWei(svalue, 'ether') })
+                .sendTransaction({
+                    from: ethAddresses[i],
+                    value: web3.toWei(svalue, 'ether'),
+                })
                 .catch(err => {
                     tmp.push(2)
                 })
-            //Try withdraw
+            //Try refund
             const accInfo = await receiverInstance.accounts(ethAddresses[i])
             const cap = (await receiverInstance.softcap()).valueOf()
             const totalSold = (await receiverInstance.soldOnVersion(version)).valueOf()
 
             tmp.push(!tmpCommon[1] && totalSold >= cap && accInfo[version].gt(0))
 
-            await receiverInstance.withdraw({ from: ethAddresses[i] }).catch(e => {
+            await receiverInstance.refund({ from: ethAddresses[i] }).catch(e => {
                 tmp.push(3)
             })
             idealCommon.push(1, 2, true, 3)
             tmpCommon = tmpCommon.concat(tmp)
         }
         //Get ether
-        await receiverInstance.getWei({ from: ethAddresses[0] })
+        await receiverInstance.withdraw({ from: ethAddresses[0] })
         tmpCommon.push(await web3.eth.getBalance(receiverInstance.address))
         idealCommon.push(0)
         const result = utils.validateValues(tmpCommon, idealCommon)
         console.log(utils.tableEqual(tmpCommon, idealCommon, true))
         assert.equal(result, idealCommon.length, ' only few tests were passed :c')
     })
-    it('(Finished receiver no withdraw)', async () => {
+    it('(Finished receiver no refund)', async () => {
         const tmp = []
         const svalue = 0.01
         const tokenValue = 1000 * 10 ** tokenSetting.decimals
@@ -430,13 +508,16 @@ contract('Receiver', accounts => {
         await fakeReceiverInstance.transfer(ethAddresses[0], tokenValue, { from: ethAddresses[0] }).catch(err => {
             tmp.push(true)
         })
-        //Try withdraw, return exception
-        await fakeReceiverInstance.withdraw({ from: ethAddresses[3] }).catch(err => {
+        //Try refund, return exception
+        await fakeReceiverInstance.refund({ from: ethAddresses[3] }).catch(err => {
             tmp.push(true)
         })
         //Try buy, return exception
         await fakeReceiverInstance
-            .sendTransaction({ from: ethAddresses[3], value: web3.toWei(svalue, 'ether') })
+            .sendTransaction({
+                from: ethAddresses[3],
+                value: web3.toWei(svalue, 'ether'),
+            })
             .catch(err => {
                 tmp.push(true)
             })
@@ -448,6 +529,7 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
                 init.receiverSetting.refererBonus,
+                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[0] },
             ))['logs'][0]['args']['_version'].valueOf(),

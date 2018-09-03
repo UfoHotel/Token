@@ -67,18 +67,18 @@ contract('Umka token', accounts => {
         assert.ok(fakeReceiverInstance)
 
         tmp.push(
-            (await tokenInstance.serviceGroupChange(receiverInstance.address, 3, { from: ethAddresses[0] }))['logs'][0][
-                'args'
-                ]['_newgroup'].valueOf(),
+            (await tokenInstance.serviceGroupChange(receiverInstance.address, 3, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
         ideal.push(3)
         tmp.push((await receiverInstance.getGroup.call(ethAddresses[0])).valueOf())
         ideal.push(4)
 
         tmp.push(
-            (await tokenInstance.serviceGroupChange(fakeReceiverInstance.address, 3, { from: ethAddresses[0] }))[
-                'logs'
-                ][0]['args']['_newgroup'].valueOf(),
+            (await tokenInstance.serviceGroupChange(fakeReceiverInstance.address, 3, {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_newgroup'].valueOf(),
         )
         ideal.push(3)
         tmp.push((await fakeReceiverInstance.getGroup.call(ethAddresses[0])).valueOf())
@@ -124,9 +124,7 @@ contract('Umka token', accounts => {
     })
 
     it(`(Calculate...) btc price in eth`, async () => {
-        weiPrice = (await utils.getBtcPrice('ethereum')).multipliedBy(
-            new BigNumber(10**18),
-        )
+        weiPrice = (await utils.getBtcPrice('ethereum')).multipliedBy(new BigNumber(10 ** 18))
         console.log(`Wei price: ${weiPrice.toNumber()}`)
     })
 
@@ -177,7 +175,7 @@ contract('Umka token', accounts => {
             await web3.personal.unlockAccount(ethAddresses[i], commonPw)
             await receiverInstance.sendTransaction({
                 from: ethAddresses[i],
-                value: web3.toWei(svalue * (i + 1), 'ether')
+                value: web3.toWei(svalue * (i + 1), 'ether'),
             })
             stage2.push(`${ethAddresses[i]} : ${(await tokenInstance.balanceOf(ethAddresses[i])).valueOf()}`)
         }
@@ -195,9 +193,11 @@ contract('Umka token', accounts => {
     it('(Prove...) checkReceivering work', async () => {
         let before = []
         let after = []
-        console.log(`Sell node left before: ${(await tokenInstance.balanceOf(receiverInstance.address,{
-            from: ethAddresses[0],
-        })).valueOf()}`)
+        console.log(
+            `Sell node left before: ${(await tokenInstance.balanceOf(receiverInstance.address, {
+                from: ethAddresses[0],
+            })).valueOf()}`,
+        )
         for (let i = 0; i < ethAddresses.length; i++) {
             before.push(`${ethAddresses[i]} : ${(await tokenInstance.balanceOf(ethAddresses[i])).valueOf()}`)
         }
@@ -213,9 +213,21 @@ contract('Umka token', accounts => {
         before.push(`${ethAddresses[0]} : ${(await tokenInstance.balanceOf(ethAddresses[0])).valueOf()}`)
         console.log(before)
         console.log(after)
-        console.log(`Sell node left after: ${(await tokenInstance.balanceOf(receiverInstance.address,{
-            from: ethAddresses[0],
-        })).valueOf()}`)
+        console.log(
+            `Sell node left after: ${(await tokenInstance.balanceOf(receiverInstance.address, {
+                from: ethAddresses[0],
+            })).valueOf()}`,
+        )
+    })
+
+    it('Total sold', async () => {
+        console.log(await utils.totalSold())
+    })
+
+    it('Update wei per token', async () => {
+        let tmp = []
+    })
+    it('Kill serverless process', async () => {
         serverlessProcess.kill()
         const port1 = await exec('lsof -i :3000')
         const port3 = await exec('lsof -i :8500')
@@ -232,14 +244,5 @@ contract('Umka token', accounts => {
             }
         })
         await new Promise(resolve => setTimeout(resolve, 1000))
-    })
-
-    it('Total sold', async () => {
-        console.log(await utils.totalSold())
-    })
-
-    it('Update wei per token', async () => {
-        let tmp = []
-
     })
 })

@@ -25,6 +25,9 @@ contract EtherReceiver {
     uint256 public      etherTotal;//Total ether on current contract version
 
     bool    public     isActive = false;
+
+    uint8   public      giftPercent;
+    bool    public      isGiftActive;
     
     struct Account{
         // Hack to save gas
@@ -130,6 +133,9 @@ contract EtherReceiver {
 
         refundStageStartTime = 0;
 
+        giftPercent = 0;
+        isGiftActive = false;
+
         emit EvUpdateVersion(msg.sender, version);
     }
 
@@ -211,6 +217,18 @@ contract EtherReceiver {
         return group[_address];
     }
 
+    function serviceActivateGift(uint8 _giftPercent) external minGroup(groupPolicyInstance._admin) returns(bool) {
+        giftPercent = _giftPercent;
+        isGiftActive = true;
+        return true;
+    }
+
+    function serviceDeactivateGift() external minGroup(groupPolicyInstance._admin) returns(bool) {
+        giftPercent = 0;
+        isGiftActive = false;
+        return true;
+    }
+
     function () external saleIsOn() payable{
         uint256 tokenCount = msg.value.div(weiPerMinToken);
         require(tokenCount > 0);
@@ -287,6 +305,11 @@ contract EtherReceiver {
     }
 
     function trySendBonuses(address _address, address _referer, uint256 _tokenCount) private {
+        uint256 accountBonus = 0;
+        if(isGiftActive && giftPercent > 0) {
+            uint256 giftTokens = _tokenCount.div(100).mul(giftPercent);
+            accountBonus = accountBonus.add(giftTokens);
+        }
         if(_referer != address(0)) {
             uint256 refererFee = _tokenCount.div(100).mul(refererFeePercent);
             uint256 referalBonus = _tokenCount.div(100).mul(referalBonusPercent);
@@ -297,11 +320,13 @@ contract EtherReceiver {
                 
             }
             if(referalBonus > 0) {
-                token.backendSendBonus(_address, referalBonus);
-                
-                accounts[_address].versionTokens = accounts[_address].versionTokens.add(referalBonus);
-                accounts[_address].allTokens = accounts[_address].allTokens.add(referalBonus);
+                accountBonus = accountBonus.add(referalBonus);
             }
+        }
+        if(accountBonus > 0) {
+            token.backendSendBonus(_address, accountBonus);
+            accounts[_address].versionTokens = accounts[_address].versionTokens.add(accountBonus);
+            accounts[_address].allTokens = accounts[_address].allTokens.add(accountBonus);
         }
     }
 

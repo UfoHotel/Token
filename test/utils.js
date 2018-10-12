@@ -60,6 +60,56 @@ const totalSold = async () => {
     return req.error
 }
 
+const createTx = async (invoker, method, params, isVisualize = true) => {
+    const txReceipt = await invoker[method](...params)
+    const { tx, logs } = txReceipt
+    if (isVisualize) {
+        console.log(
+            syntaxHighlight(
+                {
+                    method,
+                    params,
+                    tx,
+                    logs:
+                        logs &&
+                        logs.length &&
+                        logs.map(({ event, args }) => ({
+                            event,
+                            args,
+                        })),
+                },
+                null,
+                2,
+            ),
+        )
+    }
+    return txReceipt
+}
+
+function syntaxHighlight(json) {
+    if (typeof json !== 'string') {
+        json = JSON.stringify(json, undefined, 2)
+    }
+    return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        function(match) {
+            let cls = '\x1b[36m'
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = '\x1b[34m'
+                } else {
+                    cls = '\x1b[32m'
+                }
+            } else if (/true|false/.test(match)) {
+                cls = '\x1b[35m'
+            } else if (/null/.test(match)) {
+                cls = '\x1b[31m'
+            }
+            return cls + match + '\x1b[0m'
+        },
+    )
+}
+
 module.exports = {
     validateValues,
     tableEqual,
@@ -68,4 +118,5 @@ module.exports = {
     checkPayments,
     getBtcPrice,
     totalSold,
+    createTx,
 }

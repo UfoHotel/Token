@@ -22,7 +22,7 @@ contract EtherReceiver {
     mapping(address => uint8)   private     group;
 
     uint256 public     version;
-    uint256 public      etherTotal;//Total ether on current contract version
+    uint256 public      etherTotal;
 
     bool    public     isActive = false;
 
@@ -32,17 +32,12 @@ contract EtherReceiver {
     bool    public      isBulkImportEnabled;
     
     struct Account{
-        // Hack to save gas
-        // if > 0 then value + 1
         uint256 spent;
         uint256 allTokens;
         uint256 statusTokens;
         uint256 version;
-        // if > 0 then value + 1
         uint256 versionTokens;
-        // if > 0 then value + 1
         uint256 versionStatusTokens;
-        // if > 0 then value + 1
         uint256 versionRefererTokens;
         uint8 versionBeforeStatus;
     }
@@ -56,12 +51,11 @@ contract EtherReceiver {
 
     groupPolicy public groupPolicyInstance = groupPolicy(3,4);
 
-    uint256[4] public statusMinBorders; //example: [24999, 99999, 349999, 1299999]
+    uint256[4] public statusMinBorders;
 
     UHCToken public            token;
 
     event EvAccountPurchase(address indexed _address, uint256 _newspent, uint256 _newtokens, uint256 _totalsold);
-    //Используем на бекенде для возврата BTC по версии
     event EvWithdraw(address indexed _address, uint256 _spent, uint256 _version);
     event EvSwitchActivate(address indexed _switcher, bool _isActivate);
     event EvSellStatusToken(address indexed _owner, uint256 _oldtokens, uint256 _newtokens);
@@ -152,7 +146,6 @@ contract EtherReceiver {
     }
 
     function withdraw() external minGroup(groupPolicyInstance._admin) returns(bool success) {
-        //Если контракт закончился и (достигли целевых продаж или закончилось время возврата средств инвесторам)
         require(!isActive && (soldOnVersion[version] >= softcap || now > refundStageStartTime + maxRefundStageDuration));
         uint256 contractBalance = address(this).balance;
         token.owner().transfer(contractBalance);
@@ -173,7 +166,7 @@ contract EtherReceiver {
 
         weiPerMinToken = _weiPerMinToken;
     }
-    //Вычитает все токены купленные за этап, в том числе за BTC
+    
     function refund() external {
         require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration && !isBulkImportEnabled);
 
@@ -188,7 +181,7 @@ contract EtherReceiver {
         etherTotal = etherTotal.sub(value);
         
         msg.sender.transfer(value);
-        //Возврат токенов купленных за этап владельцу
+        
         if(account.versionTokens > 0) {
             token.backendRefund(msg.sender, account.versionTokens.sub(1));
             account.allTokens = account.allTokens.sub(account.versionTokens.sub(1));
@@ -196,13 +189,13 @@ contract EtherReceiver {
             account.versionStatusTokens = 1;
             account.versionTokens = 1;
         }
-        //Возврат токенов бонусов рефереру владельцу
+        
         address referer = token.refererOf(msg.sender);
         if(account.versionRefererTokens > 0 && referer != address(0)) {
             token.backendRefund(referer, account.versionRefererTokens.sub(1));
             account.versionRefererTokens = 1;
         }
-        // Откат статуса инвестора до предверсионного состояние
+        
         uint8 currentStatus = token.statusOf(msg.sender);
         if(account.versionBeforeStatus != currentStatus){
             token.backendSetStatus(msg.sender, account.versionBeforeStatus);

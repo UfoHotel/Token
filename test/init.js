@@ -73,7 +73,7 @@ const initToken = async address => {
     })
 }
 
-const initReceiver = async (tokenInstance, address) => {
+const initReceiver = async (tokenInstance, address, isActive = true) => {
     await web3.personal.unlockAccount(address, '')
     return Receiver.new(
         tokenInstance.address,
@@ -85,7 +85,7 @@ const initReceiver = async (tokenInstance, address) => {
         referalBonus,
         refererBonus,
         maxRefundStageTime,
-        true,
+        isActive,
         {
             from: address,
         },

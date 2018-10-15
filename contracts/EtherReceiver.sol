@@ -28,6 +28,8 @@ contract EtherReceiver {
 
     uint8   public      giftPercent;
     bool    public      isGiftActive;
+
+    bool    public      isBulkImportEnabled;
     
     struct Account{
         // Hack to save gas
@@ -90,6 +92,7 @@ contract EtherReceiver {
         maxRefundStageDuration = _maxRefundStageDuration;
         isActive = _activate;
         group[msg.sender] = groupPolicyInstance._admin;
+        isBulkImportEnabled = true;
     }
 
     modifier onlyOwner(){
@@ -98,7 +101,7 @@ contract EtherReceiver {
     }
 
     modifier saleIsOn() {
-        require(now > startTime && isActive && soldOnVersion[version] < softcap);
+        require(now > startTime && isActive && soldOnVersion[version] < softcap && !isBulkImportEnabled);
         _;
     }
 
@@ -172,7 +175,7 @@ contract EtherReceiver {
     }
     //Вычитает все токены купленные за этап, в том числе за BTC
     function refund() external {
-        require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration);
+        require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration && !isBulkImportEnabled);
 
         tryUpdateVersion(msg.sender);
 
@@ -227,6 +230,21 @@ contract EtherReceiver {
         giftPercent = 0;
         isGiftActive = false;
         return true;
+    }
+
+    function bulkImport(address[] investors, uint256[] weiSpent) external minGroup(groupPolicyInstance._admin) payable {
+        require(isBulkImportEnabled);
+        uint256 totalWei = msg.value;
+        for(uint256 index = 0; index < investors.length; index++) {
+            require(totalWei >= weiSpent[index]);
+            accounts[investors[index]].spent = weiSpent[index];
+            etherTotal = etherTotal.add(weiSpent[index]);
+            totalWei = totalWei.sub(weiSpent[index]);
+        }
+    }
+
+    function finishBulkImport() external minGroup(groupPolicyInstance._admin) {
+        isBulkImportEnabled = false;
     }
 
     function () external saleIsOn() payable{

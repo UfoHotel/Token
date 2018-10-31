@@ -129,10 +129,10 @@ contract EtherReceiver {
     function transfer(address _to, uint256 _value) external minGroup(groupPolicyInstance._backend) saleIsOn() {
         token.transfer( _to, _value);
 
-        updateAccountInfo(_to, 0, _value);
-
         address referer = token.refererOf(_to);
-        trySendBonuses(_to, referer, _value);
+        uint256 bonusTokens = trySendBonuses(_to, referer, _value);
+
+        updateAccountInfo(_to, 0, _value, bonusTokens);
     }
 
     function withdraw() external minGroup(groupPolicyInstance._admin) returns(bool success) {
@@ -198,20 +198,21 @@ contract EtherReceiver {
 
         token.transfer( msg.sender, tokenCount);
 
-        updateAccountInfo(msg.sender, msg.value, tokenCount);
-
         address referer = token.refererOf(msg.sender);
         if (msg.data.length > 0 && referer == address(0)) {
+
             referer = token.getPromoAddress(bytes(msg.data));
             if(referer != address(0)) {
                 require(referer != msg.sender);
                 require(token.backendSetReferer(msg.sender, referer));
             }
         }
-        trySendBonuses(msg.sender, referer, tokenCount);
+        uint256 bonusTokens = trySendBonuses(msg.sender, referer, tokenCount);
+
+        updateAccountInfo(msg.sender, msg.value, tokenCount, bonusTokens);
     }
 
-    function updateAccountInfo(address _address, uint256 incSpent, uint256 incTokenCount) private returns(bool){
+    function updateAccountInfo(address _address, uint256 incSpent, uint256 incTokenCount, uint256 bonusTokens) private returns(bool){
         tryUpdateVersion(_address);
         Account storage account = accounts[_address];
         account.spent = account.spent.add(incSpent);
@@ -229,15 +230,14 @@ contract EtherReceiver {
 
             uint256 lastStatusTokens = account.statusTokens;
 
-            account.statusTokens = account.statusTokens.add(incTokenCount);
-            account.versionStatusTokens = account.versionStatusTokens.add(incTokenCount);
+            account.statusTokens = account.statusTokens.add(incTokenCount).add(bonusTokens);
+            account.versionStatusTokens = account.versionStatusTokens.add(incTokenCount).add(bonusTokens);
 
             uint256 currentStatus = uint256(token.statusOf(_address));
 
             uint256 newStatus = currentStatus;
 
             for(uint256 i = currentStatus; i < 4; i++){
-
                 if(account.statusTokens > statusMinBorders[i]){
                     newStatus = i + 1;
                 } else {
@@ -267,7 +267,7 @@ contract EtherReceiver {
         }
     }
 
-    function trySendBonuses(address _address, address _referer, uint256 _tokenCount) private {
+    function trySendBonuses(address _address, address _referer, uint256 _tokenCount) private returns(uint256) {
         uint256 accountBonus = 0;
         if(isGiftActive && giftPercent > 0) {
             uint256 giftTokens = _tokenCount.div(100).mul(giftPercent);
@@ -280,7 +280,6 @@ contract EtherReceiver {
                 token.backendSendBonus(_referer, refererFee);
                 
                 accounts[_address].versionRefererTokens = accounts[_address].versionRefererTokens.add(refererFee);
-                
             }
             if(referalBonus > 0) {
                 accountBonus = accountBonus.add(referalBonus);
@@ -291,6 +290,7 @@ contract EtherReceiver {
             accounts[_address].versionTokens = accounts[_address].versionTokens.add(accountBonus);
             accounts[_address].allTokens = accounts[_address].allTokens.add(accountBonus);
         }
+        return accountBonus;
     }
 
     function calculateTokenCount(uint256 weiAmount) external view returns(uint256 summary){

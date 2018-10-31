@@ -15,9 +15,6 @@ contract EtherReceiver {
     uint8   public      referalBonusPercent;
     uint8   public      refererFeePercent;
 
-    uint256 public      refundStageStartTime;
-    uint256 public      maxRefundStageDuration;
-
     mapping(uint256 => uint256) public      soldOnVersion;
     mapping(address => uint8)   private     group;
 
@@ -56,7 +53,6 @@ contract EtherReceiver {
     UHCToken public            token;
 
     event EvAccountPurchase(address indexed _address, uint256 _newspent, uint256 _newtokens, uint256 _totalsold);
-    event EvWithdraw(address indexed _address, uint256 _spent, uint256 _version);
     event EvSwitchActivate(address indexed _switcher, bool _isActivate);
     event EvSellStatusToken(address indexed _owner, uint256 _oldtokens, uint256 _newtokens);
     event EvUpdateVersion(address indexed _owner, uint256 _version);
@@ -71,7 +67,6 @@ contract EtherReceiver {
         uint[4] _statusMinBorders, 
         uint8 _referalBonusPercent, 
         uint8 _refererFeePercent,
-        uint256 _maxRefundStageDuration,
         bool _activate
     ) public
     {
@@ -83,7 +78,6 @@ contract EtherReceiver {
         statusMinBorders = _statusMinBorders;
         referalBonusPercent = _referalBonusPercent;
         refererFeePercent = _refererFeePercent;
-        maxRefundStageDuration = _maxRefundStageDuration;
         isActive = _activate;
         group[msg.sender] = groupPolicyInstance._admin;
         isBulkImportEnabled = true;
@@ -111,7 +105,6 @@ contract EtherReceiver {
         uint[4] _statusMinBorders,
         uint8 _referalBonusPercent, 
         uint8 _refererFeePercent,
-        uint256 _maxRefundStageDuration,
         bool _activate
     ) 
         external
@@ -125,10 +118,7 @@ contract EtherReceiver {
         referalBonusPercent = _referalBonusPercent;
         refererFeePercent = _refererFeePercent;
         version = version.add(1);
-        maxRefundStageDuration = _maxRefundStageDuration;
         isActive = _activate;
-
-        refundStageStartTime = 0;
 
         giftPercent = 0;
         isGiftActive = false;
@@ -146,7 +136,7 @@ contract EtherReceiver {
     }
 
     function withdraw() external minGroup(groupPolicyInstance._admin) returns(bool success) {
-        require(!isActive && (soldOnVersion[version] >= softcap || now > refundStageStartTime + maxRefundStageDuration));
+        require(!isActive);
         uint256 contractBalance = address(this).balance;
         token.owner().transfer(contractBalance);
         etherTotal = 0;
@@ -157,7 +147,6 @@ contract EtherReceiver {
     function activateVersion(bool _isActive) external minGroup(groupPolicyInstance._admin) {
         require(isActive != _isActive);
         isActive = _isActive;
-        refundStageStartTime = isActive ? 0 : now;
         emit EvSwitchActivate(msg.sender, isActive);
     }
 
@@ -165,43 +154,6 @@ contract EtherReceiver {
         require (_weiPerMinToken > 0);
 
         weiPerMinToken = _weiPerMinToken;
-    }
-    
-    function refund() external {
-        require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration && !isBulkImportEnabled);
-
-        tryUpdateVersion(msg.sender);
-
-        Account storage account = accounts[msg.sender];
-
-        require(account.spent > 1);
-
-        uint256 value = account.spent.sub(1);
-        account.spent = 1;
-        etherTotal = etherTotal.sub(value);
-        
-        msg.sender.transfer(value);
-        
-        if(account.versionTokens > 0) {
-            token.backendRefund(msg.sender, account.versionTokens.sub(1));
-            account.allTokens = account.allTokens.sub(account.versionTokens.sub(1));
-            account.statusTokens = account.statusTokens.sub(account.versionStatusTokens.sub(1));
-            account.versionStatusTokens = 1;
-            account.versionTokens = 1;
-        }
-        
-        address referer = token.refererOf(msg.sender);
-        if(account.versionRefererTokens > 0 && referer != address(0)) {
-            token.backendRefund(referer, account.versionRefererTokens.sub(1));
-            account.versionRefererTokens = 1;
-        }
-        
-        uint8 currentStatus = token.statusOf(msg.sender);
-        if(account.versionBeforeStatus != currentStatus){
-            token.backendSetStatus(msg.sender, account.versionBeforeStatus);
-        }
-
-        emit EvWithdraw(msg.sender, value, version);
     }
 
     function serviceGroupChange(address _address, uint8 _group) minGroup(groupPolicyInstance._admin) external returns(uint8) {

@@ -136,6 +136,8 @@ contract('Receiver', accounts => {
         tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[1])).valueOf()))
         tmp.push(parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf()))
 
+        //Close bulkImport
+        await utils.createTx(receiverInstance, 'finishBulkImport', [{ from: ethAddresses[0] }])
         const transferReceiver = await receiverInstance.transfer(ethAddresses[1], svalue, { from: ethAddresses[0] })
 
         tmp.push(transferReceiver['logs'][0]['args']['_newtokens'])
@@ -275,7 +277,6 @@ contract('Receiver', accounts => {
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
                 init.receiverSetting.refererBonus,
-                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[0] },
             )

@@ -144,6 +144,7 @@ contract UHCToken is ERC20 {
     }
 
     function serviceSetPromo(bytes num, address _address) external minGroup(groupPolicyInstance._admin) {
+        require(promos[num] == address(0), "Address already set for this promo");
         promos[num] = _address;
     }
 

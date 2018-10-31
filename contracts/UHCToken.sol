@@ -11,10 +11,9 @@ contract UHCToken is ERC20 {
     address public owner;
     address public subowner;
 
-    bool    public              paused         = false;
     bool    public              contractEnable = true;
 
-    string  public              name = "UHC";
+    string  public              name = "UFOHotelCoin";
     string  public              symbol = "UHC";
     uint8   public              decimals = 4;
     uint256 private             summarySupply;
@@ -48,7 +47,6 @@ contract UHCToken is ERC20 {
     event EvMigration(address indexed _address, uint256 _balance, uint256 _secret);
     event EvUpdateStatus(address indexed _address, uint8 _oldstatus, uint8 _newstatus);
     event EvSetReferer(address indexed _referal, address _referer);
-    event SwitchPause(bool isPaused);
 
     constructor (string _name, string _symbol, uint8 _decimals,uint256 _summarySupply, uint8 _transferFeePercent, uint8 _refererFeePercent) public {
         require(_refererFeePercent < _transferFeePercent);
@@ -76,16 +74,6 @@ contract UHCToken is ERC20 {
         _;
     }
 
-    modifier whenNotPaused() {
-        require(!paused || accounts[msg.sender].group >= groupPolicyInstance._backend);
-        _;
-    }
-
-    modifier whenPaused() {
-        require(paused);
-        _;
-    }
-
     modifier whenNotMigrating {
         require(contractEnable);
         _;
@@ -94,16 +82,6 @@ contract UHCToken is ERC20 {
     modifier whenMigrating {
         require(!contractEnable);
         _;
-    }
-
-    function servicePause() minGroup(groupPolicyInstance._admin) whenNotPaused public {
-        paused = true;
-        emit SwitchPause(paused);
-    }
-
-    function serviceUnpause() minGroup(groupPolicyInstance._admin) whenPaused public {
-        paused = false;
-        emit SwitchPause(paused);
     }
 
     function serviceGroupChange(address _address, uint8 _group) minGroup(groupPolicyInstance._admin) external returns(uint8) {
@@ -248,7 +226,7 @@ contract UHCToken is ERC20 {
         return _transfer(_from, _to, msg.sender, _value);
     }
 
-    function _transfer(address _from, address _to, address _allow, uint256 _value) minGroup(groupPolicyInstance._default) whenNotMigrating whenNotPaused internal returns(bool) {
+    function _transfer(address _from, address _to, address _allow, uint256 _value) minGroup(groupPolicyInstance._default) whenNotMigrating internal returns(bool) {
         require(!accounts[_from].isBlocked);
         require(_from != address(0));
         require(_to != address(0));
@@ -283,7 +261,7 @@ contract UHCToken is ERC20 {
         return true;
     }
 
-    function approve(address _spender, uint256 _value) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool success) {
+    function approve(address _spender, uint256 _value) minGroup(groupPolicyInstance._default) external returns (bool success) {
         require (_value == 0 || allowed[msg.sender][_spender] == 0);
         require(_spender != address(0));
 
@@ -292,14 +270,14 @@ contract UHCToken is ERC20 {
         return true;
     }
 
-    function increaseApproval(address _spender, uint256 _addedValue) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool)
+    function increaseApproval(address _spender, uint256 _addedValue) minGroup(groupPolicyInstance._default) external returns (bool)
     {
         allowed[msg.sender][_spender] = (allowed[msg.sender][_spender].add(_addedValue));
         emit Approval(msg.sender, _spender, allowed[msg.sender][_spender]);
         return true;
     }
 
-    function decreaseApproval(address _spender, uint256 _subtractedValue) minGroup(groupPolicyInstance._default) whenNotPaused external returns (bool)
+    function decreaseApproval(address _spender, uint256 _subtractedValue) minGroup(groupPolicyInstance._default) external returns (bool)
     {
         uint256 oldValue = allowed[msg.sender][_spender];
         if (_subtractedValue > oldValue) {

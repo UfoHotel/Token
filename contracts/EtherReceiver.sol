@@ -12,8 +12,8 @@ contract EtherReceiver {
     uint256 public      weiPerMinToken;
     uint256 public      softcap;
     uint256 public      totalSold;
-    uint8   public      referalBonusPercent;
-    uint8   public      refererFeePercent;
+    //referer bonus and referal fee percent
+    uint8   public      referPercent;
 
     mapping(uint256 => uint256) public      soldOnVersion;
     mapping(address => uint8)   private     group;
@@ -65,8 +65,7 @@ contract EtherReceiver {
         uint256 _softcap,
         uint256 _durationOfStatusSell,
         uint[4] _statusMinBorders, 
-        uint8 _referalBonusPercent, 
-        uint8 _refererFeePercent,
+        uint8 _referPercent, 
         bool _activate
     ) public
     {
@@ -76,8 +75,7 @@ contract EtherReceiver {
         softcap = _softcap;
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
-        referalBonusPercent = _referalBonusPercent;
-        refererFeePercent = _refererFeePercent;
+        referPercent = _referPercent;
         isActive = _activate;
         group[msg.sender] = groupPolicyInstance._admin;
         isBulkImportEnabled = true;
@@ -103,8 +101,7 @@ contract EtherReceiver {
         uint256 _softcap,
         uint256 _durationOfStatusSell,
         uint[4] _statusMinBorders,
-        uint8 _referalBonusPercent, 
-        uint8 _refererFeePercent,
+        uint8 _referPercent, 
         bool _activate
     ) 
         external
@@ -115,8 +112,7 @@ contract EtherReceiver {
         softcap = _softcap;
         durationOfStatusSell = _durationOfStatusSell;
         statusMinBorders = _statusMinBorders;
-        referalBonusPercent = _referalBonusPercent;
-        refererFeePercent = _refererFeePercent;
+        referPercent = _referPercent;
         version = version.add(1);
         isActive = _activate;
 
@@ -174,6 +170,12 @@ contract EtherReceiver {
     function serviceDeactivateGift() external minGroup(groupPolicyInstance._admin) returns(bool) {
         giftPercent = 0;
         isGiftActive = false;
+        return true;
+    }
+
+    function serviceSetReferPercent(uint8 newReferPercent) external minGroup(groupPolicyInstance._admin) returns(bool) {
+        require(newReferPercent <= 20);
+        referPercent = newReferPercent;
         return true;
     }
 
@@ -274,15 +276,11 @@ contract EtherReceiver {
             accountBonus = accountBonus.add(giftTokens);
         }
         if(_referer != address(0)) {
-            uint256 refererFee = _tokenCount.div(100).mul(refererFeePercent);
-            uint256 referalBonus = _tokenCount.div(100).mul(referalBonusPercent);
-            if(refererFee > 0) {
-                token.backendSendBonus(_referer, refererFee);
-                
-                accounts[_address].versionRefererTokens = accounts[_address].versionRefererTokens.add(refererFee);
-            }
-            if(referalBonus > 0) {
-                accountBonus = accountBonus.add(referalBonus);
+            uint256 referTokens = _tokenCount.div(100).mul(referPercent);
+            if(referTokens > 0) {
+                token.backendSendBonus(_referer, referTokens);
+                accounts[_address].versionRefererTokens = accounts[_address].versionRefererTokens.add(referTokens);
+                accountBonus = accountBonus.add(referTokens);
             }
         }
         if(accountBonus > 0) {

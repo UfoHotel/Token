@@ -22,22 +22,22 @@ contract EtherReceiver {
     mapping(address => uint8)   private     group;
 
     uint256 public     version;
-    uint256 public      etherTotal;//Total ether on current contract version
+    uint256 public      etherTotal;
 
     bool    public     isActive = false;
+
+    uint8   public      giftPercent;
+    bool    public      isGiftActive;
+
+    bool    public      isBulkImportEnabled;
     
     struct Account{
-        // Hack to save gas
-        // if > 0 then value + 1
         uint256 spent;
         uint256 allTokens;
         uint256 statusTokens;
         uint256 version;
-        // if > 0 then value + 1
         uint256 versionTokens;
-        // if > 0 then value + 1
         uint256 versionStatusTokens;
-        // if > 0 then value + 1
         uint256 versionRefererTokens;
         uint8 versionBeforeStatus;
     }
@@ -51,12 +51,11 @@ contract EtherReceiver {
 
     groupPolicy public groupPolicyInstance = groupPolicy(3,4);
 
-    uint256[4] public statusMinBorders; //example: [24999, 99999, 349999, 1299999]
+    uint256[4] public statusMinBorders;
 
     UHCToken public            token;
 
     event EvAccountPurchase(address indexed _address, uint256 _newspent, uint256 _newtokens, uint256 _totalsold);
-    //Используем на бекенде для возврата BTC по версии
     event EvWithdraw(address indexed _address, uint256 _spent, uint256 _version);
     event EvSwitchActivate(address indexed _switcher, bool _isActivate);
     event EvSellStatusToken(address indexed _owner, uint256 _oldtokens, uint256 _newtokens);
@@ -87,6 +86,7 @@ contract EtherReceiver {
         maxRefundStageDuration = _maxRefundStageDuration;
         isActive = _activate;
         group[msg.sender] = groupPolicyInstance._admin;
+        isBulkImportEnabled = true;
     }
 
     modifier onlyOwner(){
@@ -95,7 +95,7 @@ contract EtherReceiver {
     }
 
     modifier saleIsOn() {
-        require(now > startTime && isActive && soldOnVersion[version] < softcap);
+        require(now > startTime && isActive && soldOnVersion[version] < softcap && !isBulkImportEnabled);
         _;
     }
 
@@ -130,6 +130,9 @@ contract EtherReceiver {
 
         refundStageStartTime = 0;
 
+        giftPercent = 0;
+        isGiftActive = false;
+
         emit EvUpdateVersion(msg.sender, version);
     }
 
@@ -143,7 +146,6 @@ contract EtherReceiver {
     }
 
     function withdraw() external minGroup(groupPolicyInstance._admin) returns(bool success) {
-        //Если контракт закончился и (достигли целевых продаж или закончилось время возврата средств инвесторам)
         require(!isActive && (soldOnVersion[version] >= softcap || now > refundStageStartTime + maxRefundStageDuration));
         uint256 contractBalance = address(this).balance;
         token.owner().transfer(contractBalance);
@@ -164,9 +166,9 @@ contract EtherReceiver {
 
         weiPerMinToken = _weiPerMinToken;
     }
-    //Вычитает все токены купленные за этап, в том числе за BTC
+    
     function refund() external {
-        require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration);
+        require(!isActive && soldOnVersion[version] < softcap && now <= refundStageStartTime + maxRefundStageDuration && !isBulkImportEnabled);
 
         tryUpdateVersion(msg.sender);
 
@@ -179,7 +181,7 @@ contract EtherReceiver {
         etherTotal = etherTotal.sub(value);
         
         msg.sender.transfer(value);
-        //Возврат токенов купленных за этап владельцу
+        
         if(account.versionTokens > 0) {
             token.backendRefund(msg.sender, account.versionTokens.sub(1));
             account.allTokens = account.allTokens.sub(account.versionTokens.sub(1));
@@ -187,13 +189,13 @@ contract EtherReceiver {
             account.versionStatusTokens = 1;
             account.versionTokens = 1;
         }
-        //Возврат токенов бонусов рефереру владельцу
+        
         address referer = token.refererOf(msg.sender);
         if(account.versionRefererTokens > 0 && referer != address(0)) {
             token.backendRefund(referer, account.versionRefererTokens.sub(1));
             account.versionRefererTokens = 1;
         }
-        // Откат статуса инвестора до предверсионного состояние
+        
         uint8 currentStatus = token.statusOf(msg.sender);
         if(account.versionBeforeStatus != currentStatus){
             token.backendSetStatus(msg.sender, account.versionBeforeStatus);
@@ -209,6 +211,33 @@ contract EtherReceiver {
             emit EvGroupChanged(_address, old, _group);
         }
         return group[_address];
+    }
+
+    function serviceActivateGift(uint8 _giftPercent) external minGroup(groupPolicyInstance._admin) returns(bool) {
+        giftPercent = _giftPercent;
+        isGiftActive = true;
+        return true;
+    }
+
+    function serviceDeactivateGift() external minGroup(groupPolicyInstance._admin) returns(bool) {
+        giftPercent = 0;
+        isGiftActive = false;
+        return true;
+    }
+
+    function bulkImport(address[] investors, uint256[] weiSpent) external minGroup(groupPolicyInstance._admin) payable {
+        require(isBulkImportEnabled);
+        uint256 totalWei = msg.value;
+        for(uint256 index = 0; index < investors.length; index++) {
+            require(totalWei >= weiSpent[index]);
+            accounts[investors[index]].spent = weiSpent[index];
+            etherTotal = etherTotal.add(weiSpent[index]);
+            totalWei = totalWei.sub(weiSpent[index]);
+        }
+    }
+
+    function finishBulkImport() external minGroup(groupPolicyInstance._admin) {
+        isBulkImportEnabled = false;
     }
 
     function () external saleIsOn() payable{
@@ -287,6 +316,11 @@ contract EtherReceiver {
     }
 
     function trySendBonuses(address _address, address _referer, uint256 _tokenCount) private {
+        uint256 accountBonus = 0;
+        if(isGiftActive && giftPercent > 0) {
+            uint256 giftTokens = _tokenCount.div(100).mul(giftPercent);
+            accountBonus = accountBonus.add(giftTokens);
+        }
         if(_referer != address(0)) {
             uint256 refererFee = _tokenCount.div(100).mul(refererFeePercent);
             uint256 referalBonus = _tokenCount.div(100).mul(referalBonusPercent);
@@ -297,11 +331,13 @@ contract EtherReceiver {
                 
             }
             if(referalBonus > 0) {
-                token.backendSendBonus(_address, referalBonus);
-                
-                accounts[_address].versionTokens = accounts[_address].versionTokens.add(referalBonus);
-                accounts[_address].allTokens = accounts[_address].allTokens.add(referalBonus);
+                accountBonus = accountBonus.add(referalBonus);
             }
+        }
+        if(accountBonus > 0) {
+            token.backendSendBonus(_address, accountBonus);
+            accounts[_address].versionTokens = accounts[_address].versionTokens.add(accountBonus);
+            accounts[_address].allTokens = accounts[_address].allTokens.add(accountBonus);
         }
     }
 

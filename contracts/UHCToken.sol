@@ -27,6 +27,7 @@ contract UHCToken is ERC20 {
         uint8 status;
         address referer;
         bool isBlocked;
+        bool withoutTransferFee;
     }
 
     mapping(address => account)                      private   accounts;
@@ -53,7 +54,7 @@ contract UHCToken is ERC20 {
         require(_refererFeePercent < _transferFeePercent);
         owner = msg.sender;
 
-        accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0), false);
+        accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0), false, false);
 
         holders.push(msg.sender);
         name = _name;
@@ -159,6 +160,11 @@ contract UHCToken is ERC20 {
         isTransferFee = false;
     }
     
+    function serviceAccountTransferFee(address _address, bool _withoutTransferFee) external minGroup(groupPolicyInstance._admin) {
+        require(_address != address(0));
+        require(accounts[_address].withoutTransferFee != _withoutTransferFee);
+        accounts[_address].withoutTransferFee = _withoutTransferFee;
+    }
 
     function backendSetStatus(address _address, uint8 status) external minGroup(groupPolicyInstance._backend) returns(bool){
         require(_address != address(0));
@@ -243,7 +249,7 @@ contract UHCToken is ERC20 {
         require(!accounts[_from].isBlocked);
         require(_from != address(0));
         require(_to != address(0));
-        uint256 transferFee = accounts[_from].group == 0 || !isTransferFee ? _value.div(100).mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent) : 0;
+        uint256 transferFee = accounts[_from].group == 0 && isTransferFee && !accounts[_from].withoutTransferFee ? _value.div(100).mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent) : 0;
         uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group != 0 ? 0 : _value.div(100).mul(refererFeePercent);
         uint256 summaryValue = _value.add(transferFee).add(transferRefererFee);
         require(accounts[_from].balance >= summaryValue);

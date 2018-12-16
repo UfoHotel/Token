@@ -297,7 +297,7 @@ contract('UHC token', accounts => {
 
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
-
+    /*
     it('(Prove...) pause', async () => {
         const tmp = []
         const value = 1000 * 10 ** tokenSetting.decimals
@@ -328,7 +328,7 @@ contract('UHC token', accounts => {
 
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
-
+    */
     it('(Prove...) block account', async () => {
         const tmp = []
         const svalue = 100 * 10 ** tokenSetting.decimals

@@ -22,7 +22,6 @@ const durationOfStatusSell = 3 * 30 * 24 * 60 * 60 //3 months
 const statusMinBorders = [24999, 99999, 349999, 1299999]
 const referalBonus = 5
 const refererBonus = 5
-const maxRefundStageTime = 10 ** 10
 
 const initTokens = 27000000 * 10 ** decimals
 
@@ -84,7 +83,6 @@ const initReceiver = async (tokenInstance, address, isActive = true) => {
         statusMinBorders,
         referalBonus,
         refererBonus,
-        maxRefundStageTime,
         isActive,
         {
             from: address,
@@ -103,7 +101,6 @@ const initFinishedReceiver = async (tokenInstance, address, isWithdraw = true) =
         statusMinBorders,
         referalBonus,
         refererBonus,
-        0,
         false,
         {
             from: address,
@@ -152,7 +149,6 @@ const receiverSetting = {
     statusMinBorders,
     referalBonus,
     refererBonus,
-    maxRefundStageTime,
     balance: softCap * 1.1,
 }
 

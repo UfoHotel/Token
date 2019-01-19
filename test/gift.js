@@ -21,6 +21,7 @@ contract('Receiver', accounts => {
             tokenSetting.symbol,
             ethAddresses[0],
             tokenSetting.transferFeePercent,
+            true,
         ]
 
         tokenInstance = await utils.createTx(init, 'initToken', [ethAddresses[0]])
@@ -31,6 +32,9 @@ contract('Receiver', accounts => {
         tmp.push((await tokenInstance.symbol()).valueOf())
         tmp.push((await tokenInstance.owner()).valueOf())
         tmp.push((await tokenInstance.transferFeePercent()).valueOf())
+
+        await tokenInstance.serviceOnTransferFee({ from: ethAddresses[0] })
+        tmp.push((await tokenInstance.isTransferFee()).valueOf())
 
         let result = utils.validateValues(tmp, ideal)
 
@@ -55,6 +59,9 @@ contract('Receiver', accounts => {
         tmp.push(await init.distributeTokensToReceiver(tokenInstance, receiverInstance.address, ethAddresses[0]))
         ideal.push(init.receiverSetting.balance)
 
+        //Close bulkImport
+        await utils.createTx(receiverInstance, 'finishBulkImport', [{ from: ethAddresses[0] }])
+
         let result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
@@ -62,7 +69,7 @@ contract('Receiver', accounts => {
 
     it('(Working Receiver) Buying token... (no success)', async () => {
         const giftPercent = 10
-        await utils.createTx(receiverInstance, 'serviceActivateGift', [giftPercent])
+        await utils.createTx(receiverInstance, 'serviceActivateGift', [giftPercent, { from: ethAddresses[0] }])
         let tmpCommon = []
         const idealCommon = []
         const svalue = 0.5
@@ -84,10 +91,12 @@ contract('Receiver', accounts => {
                 const ideal = []
                 const ethValue = svalue * (i + 1)
                 const hex = '0x01234' + i
+                if (j === 0) {
+                    await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {
+                        from: ethAddresses[0],
+                    })
+                }
 
-                await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {
-                    from: ethAddresses[0],
-                })
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf())
                 tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
                 await web3.personal.unlockAccount(ethAddresses[i], '')
@@ -114,14 +123,14 @@ contract('Receiver', accounts => {
                 let refererBalance = new BigNumber(tmp[0])
 
                 const referalFee = floorTmp
-                    .div(100)
-                    .integerValue(BigNumber.ROUND_FLOOR)
                     .multipliedBy(receiverSetting.referalBonus)
                     .integerValue(BigNumber.ROUND_FLOOR)
-                const refererFee = floorTmp
                     .div(100)
                     .integerValue(BigNumber.ROUND_FLOOR)
+                const refererFee = floorTmp
                     .multipliedBy(receiverSetting.refererBonus)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                    .div(100)
                     .integerValue(BigNumber.ROUND_FLOOR)
                 referalBalance = referalBalance.plus(referalFee)
                 if (i - 1 !== 0) {
@@ -131,9 +140,9 @@ contract('Receiver', accounts => {
                 }
 
                 const giftFee = floorTmp
-                    .div(100)
-                    .integerValue(BigNumber.ROUND_FLOOR)
                     .multipliedBy(giftPercent)
+                    .integerValue(BigNumber.ROUND_FLOOR)
+                    .div(100)
                     .integerValue(BigNumber.ROUND_FLOOR)
 
                 referalBalance = referalBalance.plus(giftFee)
@@ -151,111 +160,12 @@ contract('Receiver', accounts => {
                 tmp.push(...accountInfo)
                 ideal.push(tmp[0], tmp[1], floorTmp, referalBalance, refererBalance, tmp[5])
 
-                const { allToken, version, versionRefererTokens } = accounts[
-                    ethAddresses[i]
-                ]
-                //push account info calc
-                ideal.push(
-                    accountInfo[0],
-                    allToken,
-                    version.minus(1),
-                    0,
-                    allToken.plus(1),
-                    version,
-                    versionRefererTokens,
-                    0,
-                )
+                const { allToken, version, versionRefererTokens } = accounts[ethAddresses[i]]
+                ideal.push(accountInfo[0], allToken, allToken, 0, allToken, allToken, versionRefererTokens.minus(1))
+
                 idealCommon.push(...ideal)
                 tmpCommon = tmpCommon.concat(tmp)
             }
-        }
-
-        const result = utils.validateValues(tmpCommon, idealCommon)
-        console.log(utils.tableEqual(tmpCommon, idealCommon, true))
-        assert.equal(result, idealCommon.length, ' only few tests were passed :c')
-    })
-    it('(Working Receiver) Finilized receiver (no success)', async () => {
-        let tmpCommon = []
-        const idealCommon = []
-        const tokenValue = 1000 * 10 ** tokenSetting.decimals
-        const svalue = 0.01
-        //Check active
-        tmpCommon.push((await receiverInstance.isSelling()).valueOf())
-        //Switch active status
-        tmpCommon.push(
-            (await receiverInstance.activateVersion(!(await receiverInstance.isActive()).valueOf(), {
-                from: ethAddresses[0],
-            }))['logs'][0]['args']['_isActivate'].valueOf(),
-        )
-        tmpCommon.push((await receiverInstance.isSelling()).valueOf())
-        await receiverInstance
-            .refresh(
-                init.receiverSetting.startTime,
-                init.receiverSetting.softCap,
-                init.receiverSetting.durationOfStatusSell,
-                init.receiverSetting.statusMinBorders,
-                init.receiverSetting.referalBonus,
-                init.receiverSetting.refererBonus,
-                init.receiverSetting.maxRefundStageTime,
-                true,
-                { from: ethAddresses[0] },
-            )
-            .catch(e => {
-                tmpCommon.push(true)
-            })
-        await receiverInstance.withdraw({ from: ethAddresses[0] }).catch(e => {
-            tmpCommon.push(true)
-        })
-        idealCommon.push(true, false, false, true, true)
-
-        for (let i = 1; i < ethAddresses.length; i++) {
-            const tmp = []
-            //Try transfer, return exception
-            await receiverInstance.transfer(ethAddresses[i], tokenValue, { from: ethAddresses[0] }).catch(err => {
-                tmp.push(true)
-            })
-            await receiverInstance
-                .sendTransaction({
-                    from: ethAddresses[i],
-                    value: web3.toWei(svalue, 'ether'),
-                })
-                .catch(err => {
-                    tmp.push(true)
-                })
-            //Try refund
-            const referalBalance= (await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf()
-            const accInfo = await receiverInstance.accounts(ethAddresses[i])
-            const cap = (await receiverInstance.softcap()).valueOf()
-            const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
-            const tokenBalanceBeforeRefund = (await tokenInstance.balanceOf(ethAddresses[i])).valueOf()
-            const referer = (await tokenInstance.refererOf(ethAddresses[i])).valueOf()
-            const refererBalanceBeforeRefund = (await tokenInstance.balanceOf(referer)).valueOf()
-            const statusBeforeRefund = (await tokenInstance.statusOf(ethAddresses[i])).valueOf()
-            tmp.push(!tmpCommon[1] && cap - totalSold > 0 && accInfo[0].gt(0))
-            tmp.push(
-                (await receiverInstance.refund({ from: ethAddresses[i] }))['logs'][0]['args']['_spent'].valueOf() - 1,
-            )
-            //Проверка отката баланса
-            const tokenBalanceAfterRefund = (await tokenInstance.balanceOf(ethAddresses[i])).valueOf()
-            tmp.push(tokenBalanceBeforeRefund - tokenBalanceAfterRefund)
-            const refererBalanceAfterRefund = (await tokenInstance.balanceOf(referer)).valueOf()
-            tmp.push(
-                referer === ethAddresses[0] ? accInfo[6] - 1 : refererBalanceBeforeRefund - refererBalanceAfterRefund,
-            )
-            //Проверка отката статуса
-            const statusAfterRefund = (await tokenInstance.statusOf(ethAddresses[i])).valueOf()
-
-            tmp.push(statusAfterRefund)
-            idealCommon.push(
-                true,
-                true,
-                true,
-                accInfo[0],
-                accInfo[4] === 0 ? 0 : accInfo[4] - 1,
-                accInfo[6] === 0 ? 0 : accInfo[6] - 1,
-                accInfo[7],
-            )
-            tmpCommon = tmpCommon.concat(tmp)
         }
 
         const result = utils.validateValues(tmpCommon, idealCommon)
@@ -267,6 +177,12 @@ contract('Receiver', accounts => {
         //Check conditions for refresh
         //no active
         tmp.push((await receiverInstance.isActive()).valueOf())
+        tmp.push(
+            (await receiverInstance.activateVersion(!(await receiverInstance.isActive()).valueOf(), {
+                from: ethAddresses[0],
+            }))['logs'][0]['args']['_isActivate'].valueOf(),
+        )
+        await receiverInstance.withdraw({ from: ethAddresses[0] })
         //success or refund all ether from current version
         const cap = (await receiverInstance.softcap()).valueOf()
         const totalSold = (await receiverInstance.soldOnVersion(0)).valueOf()
@@ -279,8 +195,6 @@ contract('Receiver', accounts => {
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
-                init.receiverSetting.refererBonus,
-                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[1] },
             )
@@ -295,136 +209,15 @@ contract('Receiver', accounts => {
                 init.receiverSetting.durationOfStatusSell,
                 init.receiverSetting.statusMinBorders,
                 init.receiverSetting.referalBonus,
-                init.receiverSetting.refererBonus,
-                init.receiverSetting.maxRefundStageTime,
                 true,
                 { from: ethAddresses[0] },
             ))['logs'][0]['args']['_version'].valueOf(),
         )
-        const ideal = [false, true, true, 1]
+        const ideal = [true, false, true, true, 1]
         const result = utils.validateValues(tmp, ideal)
         console.log(utils.tableEqual(tmp, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
-    //sell all tokens
-    it('(Working Receiver) Buying token... (no success)', async () => {
-        const giftPercent = 5
-        await utils.createTx(receiverInstance, 'serviceActivateGift', [giftPercent])
-        let tmpCommon = []
-        const idealCommon = []
-        const svalue = 0.5
-        const mantiss = 1000000000000000000
-        const accounts = ethAddresses.reduce(
-            (acc, item) => ({
-                ...acc,
-                [item]: {
-                    allToken: new BigNumber(0),
-                    version: new BigNumber(1),
-                    versionRefererTokens: new BigNumber(1),
-                },
-            }),
-            {},
-        )
-        for (let j = 0; j < 1; j++) {
-            for (let i = 1; i < ethAddresses.length; i++) {
-                const tmp = []
-                const ideal = []
-                const ethValue = svalue * (i + 1)
-                const hex = '0x01234' + i
-
-                await tokenInstance.serviceSetPromo(hex, ethAddresses[i - 1], {
-                    from: ethAddresses[0],
-                })
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
-                await web3.personal.unlockAccount(ethAddresses[i], '')
-
-                await utils.createTx(receiverInstance, 'sendTransaction', [
-                    {
-                        from: ethAddresses[i],
-                        value: web3.toWei(ethValue, 'ether'),
-                        data: '0x01234' + i,
-                    },
-                ])
-
-                tmp.push((await receiverInstance.calculateTokenCount(web3.toWei(ethValue, 'ether'))).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[i])).valueOf())
-                tmp.push((await tokenInstance.balanceOf(ethAddresses[i - 1])).valueOf())
-                tmp.push((await receiverInstance.weiPerMinToken()).valueOf())
-
-                const floorTmp = new BigNumber(ethValue)
-                    .multipliedBy(mantiss)
-                    .div(tmp[5])
-                    .integerValue(BigNumber.ROUND_FLOOR)
-
-                let referalBalance = new BigNumber(tmp[1]).plus(floorTmp)
-                let refererBalance = new BigNumber(tmp[0])
-
-                const referalFee = floorTmp
-                    .div(100)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-                    .multipliedBy(receiverSetting.referalBonus)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-                const refererFee = floorTmp
-                    .div(100)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-                    .multipliedBy(receiverSetting.refererBonus)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-                referalBalance = referalBalance.plus(referalFee)
-                if (i - 1 !== 0) {
-                    refererBalance = refererBalance.plus(refererFee)
-                } else {
-                    refererBalance = tmp[4]
-                }
-
-                const giftFee = floorTmp
-                    .div(100)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-                    .multipliedBy(giftPercent)
-                    .integerValue(BigNumber.ROUND_FLOOR)
-
-                referalBalance = referalBalance.plus(giftFee)
-
-                accounts[ethAddresses[i]].allToken = accounts[ethAddresses[i]].allToken
-                    .plus(giftFee)
-                    .plus(referalFee)
-                    .plus(floorTmp)
-                accounts[ethAddresses[i]].version = accounts[ethAddresses[i]].version.plus(floorTmp)
-                accounts[ethAddresses[i]].versionRefererTokens = accounts[ethAddresses[i]].versionRefererTokens.plus(
-                    refererFee,
-                )
-
-                const accountInfo = (await receiverInstance.accounts(ethAddresses[i])).map(item => item.valueOf())
-                tmp.push(...accountInfo)
-                ideal.push(tmp[0], tmp[1], floorTmp, referalBalance, refererBalance, tmp[5])
-
-                const { allToken, version, versionRefererTokens } = accounts[
-                    ethAddresses[i]
-                ]
-                //push account info calc
-                ideal.push(
-                    accountInfo[0],
-                    allToken,
-                    version.minus(1),
-                    1,
-                    allToken.plus(1),
-                    version,
-                    versionRefererTokens,
-                    0,
-                )
-                idealCommon.push(...ideal)
-                tmpCommon = tmpCommon.concat(tmp)
-            }
-        }
-        const restTokens = parseInt((await tokenInstance.balanceOf(receiverInstance.address)).valueOf())
-        const transferReceiver = await receiverInstance.transfer(ethAddresses[1], restTokens, { from: ethAddresses[0] })
-        tmpCommon.push((await tokenInstance.balanceOf(receiverInstance.address)).valueOf())
-        idealCommon.push(0)
-        const result = utils.validateValues(tmpCommon, idealCommon)
-        console.log(utils.tableEqual(tmpCommon, idealCommon, true))
-        assert.equal(result, idealCommon.length, ' only few tests were passed :c')
-    })
-
     it('(Working Receiver) Finilized receiver (success)', async () => {
         let tmpCommon = []
         const idealCommon = []
@@ -440,7 +233,7 @@ contract('Receiver', accounts => {
             }))['logs'][0]['args']['_isActivate'].valueOf(),
         )
         tmpCommon.push((await receiverInstance.isSelling()).valueOf())
-        idealCommon.push(false, false, false)
+        idealCommon.push(true, false, false)
 
         for (let i = 1; i < ethAddresses.length; i++) {
             const tmp = []
@@ -456,17 +249,7 @@ contract('Receiver', accounts => {
                 .catch(err => {
                     tmp.push(2)
                 })
-            //Try refund
-            const accInfo = await receiverInstance.accounts(ethAddresses[i])
-            const cap = (await receiverInstance.softcap()).valueOf()
-            const totalSold = (await receiverInstance.soldOnVersion(version)).valueOf()
-
-            tmp.push(!tmpCommon[1] && totalSold >= cap && accInfo[version].gt(0))
-
-            await receiverInstance.refund({ from: ethAddresses[i] }).catch(e => {
-                tmp.push(3)
-            })
-            idealCommon.push(1, 2, true, 3)
+            idealCommon.push(1, 2)
             tmpCommon = tmpCommon.concat(tmp)
         }
         //Get ether

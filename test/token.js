@@ -140,38 +140,54 @@ contract('UHC token', accounts => {
     })
 
     it('(Transfer..) Token', async () => {
-        const tmp = []
         const svalue = 1000 * 10 ** tokenSetting.decimals
-        await web3.personal.unlockAccount(ethAddresses[1], '')
-        tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[0])).valueOf()))
-        tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[1])).valueOf()))
-        tmp.push((await tokenInstance.transferFeePercent()).valueOf())
-        tmp.push(
-            (await tokenInstance.transfer(ethAddresses[1], svalue, { from: ethAddresses[0] }))['logs'][0]['args'][
-                '_value'
-            ],
-        )
-        tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
-        tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
-        tmp.push(
-            (await tokenInstance.transfer(ethAddresses[0], svalue / 2, { from: ethAddresses[1] }))['logs'][0]['args'][
-                '_value'
-            ],
-        )
-        tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
-
-        let ideal = [
-            tmp[0],
-            tmp[1],
-            tokenSetting.transferFeePercent,
-            svalue,
-            tmp[0] - svalue,
-            tmp[1] + svalue,
-            svalue / 2,
-            tmp[1] + (svalue / 2) * (1 - tmp[2] / 100),
-        ]
-        let result = utils.validateValues(tmp, ideal)
-        console.log(utils.tableEqual(tmp, ideal, true))
+        const ideal = [tokenSetting.transferFeePercent]
+        const tmpCommom = []
+        tmpCommom.push((await tokenInstance.transferFeePercent()).valueOf())
+        for (let i = 0; i < 4; i++) {
+            const tmp = []
+            let tokenCount = 0
+            tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[0])).valueOf()))
+            tmp.push(parseInt((await tokenInstance.balanceOf(ethAddresses[1])).valueOf()))
+            tmp.push(
+                (await tokenInstance.transfer(ethAddresses[1], svalue, { from: ethAddresses[0] }))['logs'][0]['args'][
+                    '_value'
+                ],
+            )
+            tmp.push((await tokenInstance.balanceOf(ethAddresses[0])).valueOf())
+            tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
+            switch (i) {
+                case 0:
+                    tokenCount = tmp[1] + svalue / 2
+                    break
+                case 1:
+                    // unlock transfer fee
+                    await web3.personal.unlockAccount(ethAddresses[1], '')
+                    await tokenInstance.serviceOnTransferFee({ from: ethAddresses[0] })
+                    tokenCount = tmp[1] + (svalue / 2) * (1 - tmpCommom[0] / 100)
+                    break
+                case 2:
+                    //lock transfer fee for 1 index address
+                    await tokenInstance.serviceAccountTransferFee(ethAddresses[1], true, { from: ethAddresses[0] })
+                    tokenCount = tmp[1] + svalue / 2
+                    break
+                case 3:
+                    //lock transfer fee for 1 index address
+                    await tokenInstance.serviceAccountTransferFee(ethAddresses[1], false, { from: ethAddresses[0] })
+                    tokenCount = tmp[1] + (svalue / 2) * (1 - tmpCommom[0] / 100)
+                    break
+            }
+            tmp.push(
+                (await tokenInstance.transfer(ethAddresses[0], svalue / 2, { from: ethAddresses[1] }))['logs'][0][
+                    'args'
+                ]['_value'],
+            )
+            tmp.push((await tokenInstance.balanceOf(ethAddresses[1])).valueOf())
+            ideal.push(...[tmp[0], tmp[1], svalue, tmp[0] - svalue, tmp[1] + svalue, svalue / 2, tokenCount])
+            tmpCommom.push(...tmp)
+        }
+        let result = utils.validateValues(tmpCommom, ideal)
+        console.log(utils.tableEqual(tmpCommom, ideal, true))
         assert.equal(result, ideal.length, ' only few tests were passed :c')
     })
     it('(Approve(first time) & TransferFrom...) Token', async () => {

@@ -6,7 +6,7 @@ const BigNumber = require('bignumber.js')
 const web3 = Token.web3
 
 //TokenSettings
-const name = 'UHC-Token'
+const name = 'UFOHotelCoin'
 const symbol = 'UHC'
 const decimals = 4
 const totalSupply = 936000000 * 10 ** decimals
@@ -17,9 +17,9 @@ const transferReferFeePercent = 1
 const startTime = utils.time(new Date())
 const fakeStartTime = utils.time(new Date()) - 100000
 const weiPerMinToken = 40518882697
-const softCap = 26000000 * 10 ** decimals
+const softCap = 23400000 * 10 ** decimals
 const durationOfStatusSell = 3 * 30 * 24 * 60 * 60 //3 months
-const statusMinBorders = [24999, 99999, 349999, 1299999]
+const statusMinBorders = [249990000, 999990000, 3499990000, 12999990000]
 const referalBonus = 5
 const refererBonus = 5
 
@@ -82,7 +82,6 @@ const initReceiver = async (tokenInstance, address, isActive = true) => {
         durationOfStatusSell,
         statusMinBorders,
         referalBonus,
-        refererBonus,
         isActive,
         {
             from: address,
@@ -100,7 +99,6 @@ const initFinishedReceiver = async (tokenInstance, address, isWithdraw = true) =
         durationOfStatusSell,
         statusMinBorders,
         referalBonus,
-        refererBonus,
         false,
         {
             from: address,
@@ -124,7 +122,7 @@ const distributeTokens = async (token, owner, addresses) => {
 }
 
 const distributeTokensToReceiver = async (token, receiverAddress, owner) => {
-    return (await token.transfer(receiverAddress, softCap * 1.1, {
+    return (await token.transfer(receiverAddress, softCap, {
         from: owner,
     }))['logs'][0]['args']['_value'].valueOf()
 }
@@ -149,7 +147,7 @@ const receiverSetting = {
     statusMinBorders,
     referalBonus,
     refererBonus,
-    balance: softCap * 1.1,
+    balance: softCap,
 }
 
 module.exports = {

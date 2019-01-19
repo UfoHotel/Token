@@ -36,7 +36,6 @@ contract EtherReceiver {
         uint256 versionTokens;
         uint256 versionStatusTokens;
         uint256 versionRefererTokens;
-        uint8 versionBeforeStatus;
     }
 
     mapping(address => Account) public accounts;
@@ -184,6 +183,7 @@ contract EtherReceiver {
         uint256 totalWei = msg.value;
         for(uint256 index = 0; index < investors.length; index++) {
             require(totalWei >= weiSpent[index]);
+            tryUpdateVersion(investors[index]);
             accounts[investors[index]].spent = weiSpent[index];
             etherTotal = etherTotal.add(weiSpent[index]);
             totalWei = totalWei.sub(weiSpent[index]);
@@ -259,7 +259,6 @@ contract EtherReceiver {
         Account storage account = accounts[_address];
         if(account.version != version){
             account.version = version;
-            account.versionBeforeStatus = token.statusOf(_address);
         }
         if(account.version != version || account.spent == 0){
             account.spent = 1;
@@ -272,11 +271,11 @@ contract EtherReceiver {
     function trySendBonuses(address _address, address _referer, uint256 _tokenCount) private returns(uint256) {
         uint256 accountBonus = 0;
         if(isGiftActive && giftPercent > 0) {
-            uint256 giftTokens = _tokenCount.div(100).mul(giftPercent);
+            uint256 giftTokens = _tokenCount.mul(giftPercent).div(100);
             accountBonus = accountBonus.add(giftTokens);
         }
         if(_referer != address(0)) {
-            uint256 referTokens = _tokenCount.div(100).mul(referPercent);
+            uint256 referTokens = _tokenCount.mul(referPercent).div(100);
             if(referTokens > 0) {
                 token.backendSendBonus(_referer, referTokens);
                 accounts[_address].versionRefererTokens = accounts[_address].versionRefererTokens.add(referTokens);

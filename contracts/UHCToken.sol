@@ -54,7 +54,7 @@ contract UHCToken is ERC20 {
         require(_refererFeePercent < _transferFeePercent);
         owner = msg.sender;
 
-        accounts[owner] = account(_summarySupply,groupPolicyInstance._owner,3, address(0), false, false);
+        accounts[owner] = account(_summarySupply, groupPolicyInstance._owner, 4, address(0), false, false);
 
         holders.push(msg.sender);
         name = _name;
@@ -249,8 +249,8 @@ contract UHCToken is ERC20 {
         require(!accounts[_from].isBlocked);
         require(_from != address(0));
         require(_to != address(0));
-        uint256 transferFee = accounts[_from].group == 0 && isTransferFee && !accounts[_from].withoutTransferFee ? _value.div(100).mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent) : 0;
-        uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group != 0 ? 0 : _value.div(100).mul(refererFeePercent);
+        uint256 transferFee = accounts[_from].group == 0 && isTransferFee && !accounts[_from].withoutTransferFee ? _value.mul(accounts[_from].referer == address(0) ? transferFeePercent : transferFeePercent - refererFeePercent).div(100) : 0;
+        uint256 transferRefererFee = accounts[_from].referer == address(0) || accounts[_from].group != 0 ? 0 : _value.mul(refererFeePercent).div(100);
         uint256 summaryValue = _value.add(transferFee).add(transferRefererFee);
         require(accounts[_from].balance >= summaryValue);
         require(_allow == address(0) || allowed[_from][_allow] >= summaryValue);
